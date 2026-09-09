@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "conformal-prediction-kit"
+version = "0.1.0"
+description = "Distribution-free prediction intervals and prediction sets with finite-sample coverage guarantees"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Muhtasim Munif Fahim" }]
+keywords = ["conformal-prediction", "uncertainty-quantification", "machine-learning", "calibration"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = ["numpy>=1.22"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "ruff>=0.4"]
+
+[project.scripts]
+conformal-kit = "conformal_kit.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Muhtasim-Munif-Fahim/conformal-prediction-kit"
+Issues = "https://github.com/Muhtasim-Munif-Fahim/conformal-prediction-kit/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
