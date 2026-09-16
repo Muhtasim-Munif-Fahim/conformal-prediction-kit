@@ -36,6 +36,33 @@ conformal = SplitConformalRegressor(alpha=0.1, normalize=True).fit(
 lower, upper = conformal.predict_interval(test_pred, difficulty=test_sigma)
 ```
 
+## Jackknife+ and CV+: intervals without a calibration split
+
+Split conformal is cheapest when you can spare a held-out calibration set. Jackknife+ spends that data on training instead, by refitting leave-one-out so every residual comes from a model that never saw that point. CV+ is the same idea with `K` folds rather than `n`. sklearn is not required: pass a duck-typed `fit` / `predict` estimator, or a callable that fits and returns a predictor.
+
+```python
+from conformal_kit import JackknifePlusRegressor
+
+def mean_trainer(X_train, y_train):
+    mu = float(y_train.mean())
+    return lambda X: np.full(len(np.asarray(X)), mu)
+
+# Leave-one-out jackknife+: n refits, every point trains a model.
+conformal = JackknifePlusRegressor(alpha=0.1).fit(X, y, mean_trainer)
+lower, upper = conformal.predict_interval(X_test)
+
+# CV+ with 10 folds: the practical default when n refits are too slow.
+conformal = JackknifePlusRegressor(alpha=0.1, n_splits=10).fit(X, y, mean_trainer)
+```
+
+### When to use which
+
+- **Split conformal** when a fitted model and a held-out calibration set already exist, or when `n` is large enough that holding out 20–50% is cheap. One fit, `1 - alpha` coverage, constant (or difficulty-scaled) width.
+- **Jackknife+** when the sample is too small to spare a calibration split and `n` refits are affordable (linear models, small trees).
+- **CV+** (`n_splits=10`) as the jackknife-style default for anything slower to fit: almost the same intervals, `K` refits.
+
+The finite-sample guarantee for jackknife+ / CV+ is `1 - 2 * alpha`, not `1 - alpha`. In practice the intervals usually land close to the split-conformal target; the extra `alpha` is the price of not holding data out. Split conformal is the right default whenever a calibration split is affordable.
+
 ## Classification: prediction sets
 
 ```python
