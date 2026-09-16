@@ -101,7 +101,7 @@ def _as_trainer(model):
         def train(X_train, y_train, _factory=model):
             predictor = _factory(X_train, y_train)
             if not callable(predictor):
-                raise ValueError(
+                raise TypeError(
                     "callable model must return a predictor: model(X, y) -> predict(X)"
                 )
             return predictor
@@ -201,8 +201,6 @@ class JackknifePlusRegressor:
         for fold in range(n_splits):
             held_out = fold_ids == fold
             predictor = trainer(features[~held_out], observed[~held_out])
-            if not callable(predictor):
-                raise ValueError("model must produce a callable predictor")
             out_pred = _as_predictions(
                 predictor(features[held_out]), int(held_out.sum()), "model"
             )

@@ -209,8 +209,12 @@ class TestJackknifePlusRegressor:
         def bad(X, y):
             return np.mean(y)
 
-        with pytest.raises(ValueError, match="must return a predictor"):
+        with pytest.raises(TypeError, match="must return a predictor"):
             JackknifePlusRegressor().fit(np.zeros((20, 1)), np.arange(20.0), bad)
+
+    def test_a_non_model_is_rejected(self):
+        with pytest.raises(ValueError, match="fit and predict"):
+            JackknifePlusRegressor().fit(np.zeros((20, 1)), np.arange(20.0), object())
 
     @pytest.mark.parametrize("bad", [0.0, 1.0, -1.0])
     def test_alpha_is_validated_at_construction(self, bad):

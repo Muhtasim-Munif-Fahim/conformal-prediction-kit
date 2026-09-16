@@ -12,13 +12,13 @@ from .regression import SplitConformalRegressor, conformal_quantile
 __version__ = "0.1.0"
 
 __all__ = [
+    "JackknifePlusRegressor",
     "SplitConformalClassifier",
     "SplitConformalRegressor",
-    "JackknifePlusRegressor",
+    "__version__",
     "conformal_quantile",
-    "jackknife_plus_interval",
     "coverage_by_group",
     "interval_coverage_report",
+    "jackknife_plus_interval",
     "set_coverage_report",
-    "__version__",
 ]
