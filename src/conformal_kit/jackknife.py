@@ -31,7 +31,8 @@ __all__ = ["JackknifePlusRegressor", "jackknife_plus_interval"]
 def jackknife_plus_interval(loo_predictions, residuals, alpha):
     """Return jackknife+ ``(lower, upper)`` from leave-one-out predictions.
 
-    ``residuals`` has length ``n``. ``loo_predictions`` is either the
+    ``residuals`` has length ``n`` and must be nonnegative magnitudes.
+    ``loo_predictions`` is either the
     leave-one-out prediction of a single test point (length ``n``) or a
     ``(n, n_test)`` matrix whose ``i``-th row is the prediction from the
     model trained without point ``i``.
@@ -56,6 +57,8 @@ def jackknife_plus_interval(loo_predictions, residuals, alpha):
         raise ValueError("at least one residual is required")
     if not np.all(np.isfinite(scores)) or not np.all(np.isfinite(predictions)):
         raise ValueError("loo predictions and residuals must all be finite")
+    if np.any(scores < 0):
+        raise ValueError("residuals must be nonnegative")
     if not 0.0 < alpha < 1.0:
         raise ValueError("alpha must be strictly between 0 and 1")
 

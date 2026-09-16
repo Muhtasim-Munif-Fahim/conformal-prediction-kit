@@ -86,6 +86,12 @@ class TestJackknifePlusInterval:
         with pytest.raises(ValueError, match="must all be finite"):
             jackknife_plus_interval([0.0, np.inf] * 5, np.ones(10), 0.1)
 
+    def test_negative_residuals_are_rejected(self):
+        residuals = np.arange(1.0, 10.0)
+        residuals[0] = -1.0
+        with pytest.raises(ValueError, match="residuals must be nonnegative"):
+            jackknife_plus_interval(np.zeros(9), residuals, 0.1)
+
 
 class TestJackknifePlusRegressor:
     def test_fit_returns_self_for_chaining(self):
