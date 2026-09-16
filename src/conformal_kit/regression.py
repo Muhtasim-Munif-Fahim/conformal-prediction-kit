@@ -68,6 +68,10 @@ class SplitConformalRegressor:
     anything positive that tracks uncertainty), so the width scales with it.
     Marginal coverage is unchanged; the intervals just distribute their width
     where it is needed.
+
+    When holding out a calibration set is too expensive, see
+    :class:`~conformal_kit.jackknife.JackknifePlusRegressor`, which refits
+    leave-one-out or K-fold so every point still trains a model.
     """
 
     def __init__(self, alpha=0.1, normalize=False):
