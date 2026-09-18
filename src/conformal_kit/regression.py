@@ -69,7 +69,10 @@ class SplitConformalRegressor:
     Marginal coverage is unchanged; the intervals just distribute their width
     where it is needed.
 
-    When holding out a calibration set is too expensive, see
+    When the model is a quantile regressor rather than a point predictor,
+    see :class:`~conformal_kit.cqr.ConformalizedQuantileRegressor`, which
+    conformalizes the lower and upper bounds directly. When holding out a
+    calibration set is too expensive, see
     :class:`~conformal_kit.jackknife.JackknifePlusRegressor`, which refits
     leave-one-out or K-fold so every point still trains a model.
     """
