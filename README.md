@@ -36,6 +36,23 @@ conformal = SplitConformalRegressor(alpha=0.1, normalize=True).fit(
 lower, upper = conformal.predict_interval(test_pred, difficulty=test_sigma)
 ```
 
+## CQR: conformalized quantile regression
+
+When the model already predicts a lower and an upper quantile, conformalize those bounds instead of a point prediction. CQR (Romano, Patterson, Candès 2019) measures how far calibration labels fall outside the predicted quantile interval and expands both sides by a finite-sample quantile of that score. Marginal coverage is `1 - alpha`; the width still follows the quantile model, so intervals stay narrow where the noise is small.
+
+sklearn is not required: train any quantile regressor (typically at `alpha / 2` and `1 - alpha / 2`) and pass its predictions.
+
+```python
+from conformal_kit import ConformalizedQuantileRegressor
+
+conformal = ConformalizedQuantileRegressor(alpha=0.1).fit(
+    y_calibration, calibration_lower, calibration_upper
+)
+lower, upper = conformal.predict_interval(test_lower, test_upper)
+```
+
+If the two quantile bounds are identical, CQR reduces to split conformal around a point prediction.
+
 ## Jackknife+ and CV+: intervals without a calibration split
 
 Split conformal is cheapest when you can spare a held-out calibration set. Jackknife+ spends that data on training instead, by refitting leave-one-out so every residual comes from a model that never saw that point. CV+ is the same idea with `K` folds rather than `n`. sklearn is not required: pass a duck-typed `fit` / `predict` estimator, or a callable that fits and returns a predictor.
@@ -58,6 +75,7 @@ conformal = JackknifePlusRegressor(alpha=0.1, n_splits=10).fit(X, y, mean_traine
 ### When to use which
 
 - **Split conformal** when a fitted model and a held-out calibration set already exist, or when `n` is large enough that holding out 20–50% is cheap. One fit, `1 - alpha` coverage, constant (or difficulty-scaled) width.
+- **CQR** when a quantile-regression model already produces lower and upper bounds. Same wrap-predictions API as split conformal; the interval width follows the quantile model instead of a separate difficulty estimate.
 - **Jackknife+** when the sample is too small to spare a calibration split and `n` refits are affordable (linear models, small trees).
 - **CV+** (`n_splits=10`) as the jackknife-style default for anything slower to fit: almost the same intervals, `K` refits.
 
@@ -104,7 +122,7 @@ conformal-kit evaluate --predictions intervals.csv --alpha 0.1
 python examples/run_demo.py
 ```
 
-Fits intervals on a heteroskedastic synthetic problem, compares standard against normalized conformal, and writes a report to `examples/output/`.
+Fits intervals on a heteroskedastic synthetic problem, compares standard, normalized, and CQR conformal, and writes a report to `examples/output/`.
 
 ## What this does not do
 
