@@ -41,7 +41,7 @@ class TestCqrScores:
         assert cqr_scores(y_true, pred, pred) == pytest.approx(np.abs(y_true))
 
     def test_inverted_quantile_predictions_are_rejected(self):
-        with pytest.raises(ValueError, match="greater than or equal to lower"):
+        with pytest.raises(ValueError, match="greater than or equal to y_lower"):
             cqr_scores([0.0], [2.0], [-1.0])
 
     def test_mismatched_lengths_are_rejected(self):
@@ -119,7 +119,7 @@ class TestConformalizedQuantileRegressor:
     def test_inverted_test_bounds_are_rejected(self):
         y_true, y_lower, y_upper, _ = _heteroskedastic(n=80, seed=4)
         model = ConformalizedQuantileRegressor(alpha=0.1).fit(y_true, y_lower, y_upper)
-        with pytest.raises(ValueError, match="greater than or equal to lower"):
+        with pytest.raises(ValueError, match="greater than or equal to y_lower"):
             model.predict_interval([1.0], [0.0])
 
     def test_too_few_points_for_the_level_is_rejected(self):
@@ -163,9 +163,8 @@ class TestHeteroskedasticCoverage:
         z = 1.2815515655446004
         lower, upper = model.predict_interval(-z * test_sigma, z * test_sigma)
         widths = upper - lower
-        # CQR adds 2 * Q to every interval, so differences in width equal
-        # differences in the raw quantile width, which is linear in sigma.
-        assert widths[1] - widths[0] == pytest.approx(widths[2] - widths[1])
+        # width = 2 * z * sigma + 2 * Q, so width is affine in local noise.
+        assert widths == pytest.approx(2.0 * z * test_sigma + 2.0 * model.quantile_)
         assert widths[2] > widths[1] > widths[0]
 
     def test_coverage_is_even_across_noise_regions(self):

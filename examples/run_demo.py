@@ -85,8 +85,10 @@ def main():
     lines = [
         "# Conformal intervals on heteroskedastic data",
         "",
-        f"{N} points, noise sigma rising from 0.2 to 5.2 across the range. "
-        "Target coverage 90%.",
+        (
+            f"{N} points, noise sigma rising from 0.2 to 5.2 across the range. "
+            "Target coverage 90%."
+        ),
         "",
         "## Marginal coverage",
         "",
@@ -125,17 +127,26 @@ def main():
         "",
         "## Reading it",
         "",
-        f"Coverage spread across regions: standard {standard_spread:.1%}, "
-        f"normalized {normalized_spread:.1%}, CQR {cqr_spread:.1%}.",
+        (
+            f"Coverage spread across regions: standard {standard_spread:.1%}, "
+            f"normalized {normalized_spread:.1%}, CQR {cqr_spread:.1%}."
+        ),
         "",
-        "The standard interval is one fixed width, so it over-covers the "
-        "quiet region and under-covers the noisy one while averaging out to "
-        "the target. Normalized conformal scales with a difficulty estimate; "
-        "CQR scales with a quantile model's lower and upper bounds. Both "
-        "serve each region at close to the rate asked for.",
+        (
+            "The standard interval is one fixed width, so it over-covers the "
+            "quiet region and under-covers the noisy one while averaging out to "
+            "the target. Normalized conformal multiplies width by a difficulty "
+            "estimate, so each region is served at close to the rate asked for. "
+            "CQR expands a quantile model's lower and upper bounds by one shared "
+            "amount: widths still track local noise, and coverage is more even "
+            "than the constant-width interval, without needing a separate "
+            "difficulty estimate."
+        ),
         "",
-        "This is what marginal coverage hides, and why "
-        "`interval_coverage_report` takes a `groups` argument.",
+        (
+            "This is what marginal coverage hides, and why "
+            "`interval_coverage_report` takes a `groups` argument."
+        ),
         "",
     ]
 
