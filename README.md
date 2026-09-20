@@ -97,6 +97,27 @@ Two scoring rules:
 - `lac` (least ambiguous classifier) gives the smallest average set size, but coverage is uneven across classes.
 - `aps` (adaptive prediction sets) gives larger sets that adapt to how uncertain each point is, with coverage spread more evenly.
 
+Both give *marginal* coverage: the average over all test points is at least `1 - alpha`. A rare or hard class can still be under-covered while easy classes make up the average.
+
+## Mondrian: class-conditional prediction sets
+
+Mondrian conformal prediction (Vovk, Lindsay, Nouretdinov, Gammerman) gives each label its own threshold. Calibration scores are grouped by the true class and the finite-sample quantile is taken inside each group, so coverage holds *given the true label*, not only on average.
+
+```python
+from conformal_kit import MondrianConformalClassifier
+
+conformal = MondrianConformalClassifier(alpha=0.1, method="aps").fit(
+    y_calibration, calibration_probabilities
+)
+sets = conformal.predict_set(test_probabilities)
+```
+
+Same `fit` / `predict_set` / `predict_labels` / `set_sizes` API as `SplitConformalClassifier`, and the same `lac` / `aps` scoring rules. The difference is one number versus one number per class.
+
+The cost is data. Every class needs enough calibration examples to support the finite-sample quantile — at `alpha=0.1` that is 9 points *per class*, not 9 points overall. A class that never appears cannot get a threshold; `fit` refuses rather than invent one.
+
+Use split conformal when you only need average coverage. Use Mondrian when a missed class is as bad as a missed point — a rare diagnosis, a safety label, any setting where the class you fail on is the one that matters. Check it with `set_coverage_report(..., groups=y_test)`.
+
 ## Evaluating coverage
 
 Coverage is a claim to be checked, not assumed:
@@ -126,7 +147,7 @@ Fits intervals on a heteroskedastic synthetic problem, compares standard, normal
 
 ## What this does not do
 
-- The coverage guarantee is **marginal**, averaged over test points. It does not promise coverage within a subgroup; `interval_coverage_report` accepts a `groups` argument so you can check that yourself.
+- Split conformal's coverage guarantee is **marginal**, averaged over test points. It does not promise coverage within a subgroup. Mondrian conformal is the exception for *class labels*: each class gets its own threshold, so coverage holds conditionally on the true label. Other subgroups (age, region, ...) are still not guaranteed; `interval_coverage_report` and `set_coverage_report` accept a `groups` argument so you can check that yourself.
 - It assumes **exchangeability**. Under distribution shift or on time series with trend, the guarantee lapses.
 - It wraps a model, it does not improve one. A weak model gets valid but wide intervals.
 

@@ -81,11 +81,15 @@ def set_coverage_report(y_true, prediction_sets, alpha=0.1, groups=None):
     """Measure empirical coverage and size of classification prediction sets.
 
     ``prediction_sets`` is the boolean ``(n_samples, n_classes)`` mask from
-    :meth:`SplitConformalClassifier.predict_set`. Returns the same coverage
-    fields as :func:`interval_coverage_report` plus ``mean_set_size``,
-    ``median_set_size`` and ``singleton_rate`` -- the share of points the
-    model resolved to exactly one class, which is the practical measure of
-    how useful the sets are.
+    :meth:`~conformal_kit.classification.SplitConformalClassifier.predict_set`
+    or :meth:`~conformal_kit.classification.MondrianConformalClassifier.predict_set`.
+    Returns the same coverage fields as :func:`interval_coverage_report`
+    plus ``mean_set_size``, ``median_set_size`` and ``singleton_rate`` --
+    the share of points the model resolved to exactly one class, which is
+    the practical measure of how useful the sets are.
+
+    Pass ``groups=y_true`` to read coverage per class. That is the check
+    Mondrian is designed to pass and split conformal is not.
     """
     labels = np.asarray(y_true).ravel()
     mask = np.asarray(prediction_sets, dtype=bool)
