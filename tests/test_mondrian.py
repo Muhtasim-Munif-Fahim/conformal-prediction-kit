@@ -99,14 +99,29 @@ class TestCoverage:
 
     @pytest.mark.parametrize("method", ["lac", "aps"])
     def test_every_class_meets_the_target(self, method):
-        labels, probabilities = _problem(n=6000, k=4, seed=4)
+        # One calibration split can land a class a bit below 1 - alpha; the
+        # guarantee is over the draw of the calibration set, so average it.
+        per_class = {cls: [] for cls in range(4)}
+        for seed in range(6):
+            labels, probabilities = _problem(n=4000, k=4, seed=seed)
+            (cal_y, cal_p), (test_y, test_p) = _split(labels, probabilities)
+            model = MondrianConformalClassifier(alpha=0.1, method=method).fit(cal_y, cal_p)
+            mask = model.predict_set(test_p)
+            inside = mask[np.arange(len(test_y)), test_y]
+            for cls in range(4):
+                per_class[cls].append(inside[test_y == cls].mean())
+        for values in per_class.values():
+            assert np.mean(values) >= 0.88
+
+    def test_set_coverage_report_breaks_coverage_down_by_class(self):
+        labels, probabilities = _problem(n=4000, k=3, seed=1)
         (cal_y, cal_p), (test_y, test_p) = _split(labels, probabilities)
-        model = MondrianConformalClassifier(alpha=0.1, method=method).fit(cal_y, cal_p)
-        mask = model.predict_set(test_p)
-        report = set_coverage_report(test_y, mask, alpha=0.1, groups=test_y)
-        for row in report["by_group"]:
-            assert row["coverage"] >= 0.86
-            assert row["n"] > 200
+        model = MondrianConformalClassifier(alpha=0.1, method="lac").fit(cal_y, cal_p)
+        report = set_coverage_report(
+            test_y, model.predict_set(test_p), alpha=0.1, groups=test_y
+        )
+        assert {row["group"] for row in report["by_group"]} == {0, 1, 2}
+        assert report["coverage"] >= 0.88
 
     def test_split_conformal_can_miss_a_hard_class_that_mondrian_covers(self):
         labels, probabilities = _uneven_problem()
