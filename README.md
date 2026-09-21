@@ -78,6 +78,7 @@ conformal = JackknifePlusRegressor(alpha=0.1, n_splits=10).fit(X, y, mean_traine
 - **CQR** when a quantile-regression model already produces lower and upper bounds. Same wrap-predictions API as split conformal; the interval width follows the quantile model instead of a separate difficulty estimate.
 - **Jackknife+** when the sample is too small to spare a calibration split and `n` refits are affordable (linear models, small trees).
 - **CV+** (`n_splits=10`) as the jackknife-style default for anything slower to fit: almost the same intervals, `K` refits.
+- **ACI** when points arrive as a stream and exchangeability may fail — a distribution shift, a time series with drift. The miscoverage level moves after every outcome so long-run coverage tracks `1 - alpha`.
 
 The finite-sample guarantee for jackknife+ / CV+ is `1 - 2 * alpha`, not `1 - alpha`. In practice the intervals usually land close to the split-conformal target; the extra `alpha` is the price of not holding data out. Split conformal is the right default whenever a calibration split is affordable.
 
@@ -118,6 +119,33 @@ The cost is data. Every class needs enough calibration examples to support the f
 
 Use split conformal when you only need average coverage. Use Mondrian when a missed class is as bad as a missed point — a rare diagnosis, a safety label, any setting where the class you fail on is the one that matters. Check it with `set_coverage_report(..., groups=y_test)`.
 
+## ACI: coverage under distribution shift
+
+Split conformal's guarantee needs exchangeable calibration and test points. After a shift the frozen quantile is wrong, and coverage drops until you recalibrate. Adaptive conformal inference (Gibbs and Candès 2021) keeps a time-varying miscoverage level `alpha_t` and updates it after every outcome:
+
+```text
+alpha_{t+1} = alpha_t + gamma * (alpha - err_t)
+```
+
+`err_t` is 1 if the interval (or set) missed, 0 if it covered. A miss lowers `alpha_t`, so the next finite-sample quantile of the residual window is more conservative; a hit raises it. The average of `err_t` tracks `alpha` at rate `O(1 / (gamma T))`, with no exchangeability assumption.
+
+The wrap-predictions API matches split conformal. `fit` seeds the residual window at the target `alpha`. `predict_update` is the online loop: issue an interval, observe the label, adapt before the next point.
+
+```python
+from conformal_kit import AdaptiveConformalRegressor
+
+conformal = AdaptiveConformalRegressor(alpha=0.1, gamma=0.05).fit(
+    y_calibration, calibration_pred
+)
+lower, upper = conformal.predict_update(stream_pred, stream_y)
+```
+
+`gamma` is the step size. Smaller values track slowly and oscillate less; larger values react faster after a shift. `window_size` optionally forgets the oldest residuals; the default expanding window still works because `alpha_t` compensates.
+
+The same updater wraps classification scores (`lac` or `aps`) as `AdaptiveConformalClassifier`, with `predict_set` / `predict_update` in place of intervals. Either way the object is a residual conformalizer: it never sees features and never retrains the model.
+
+ACI restores *long-run* coverage along the stream. It does not restore a finite-sample exchangeability guarantee on any one window, and it does not give class-conditional coverage. Right after a sudden shift the next few sets can miss while `alpha_t` catches up.
+
 ## Evaluating coverage
 
 Coverage is a claim to be checked, not assumed:
@@ -148,7 +176,7 @@ Fits intervals on a heteroskedastic synthetic problem, compares standard, normal
 ## What this does not do
 
 - Split conformal's coverage guarantee is **marginal**, averaged over test points. It does not promise coverage within a subgroup. Mondrian conformal is the exception for *class labels*: each class gets its own threshold, so coverage holds conditionally on the true label. Other subgroups (age, region, ...) are still not guaranteed; `interval_coverage_report` and `set_coverage_report` accept a `groups` argument so you can check that yourself.
-- It assumes **exchangeability**. Under distribution shift or on time series with trend, the guarantee lapses.
+- Split conformal, CQR, jackknife+ and Mondrian assume **exchangeability**. Under distribution shift or on a time series with trend, that guarantee lapses. ACI is the exception for *long-run* coverage: `alpha_t` moves after every miss or hit so the average along the stream tracks `1 - alpha`, without assuming exchangeability. It does not restore conditional coverage, and a single window right after a shift can still under-cover.
 - It wraps a model, it does not improve one. A weak model gets valid but wide intervals.
 
 ## License

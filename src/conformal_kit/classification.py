@@ -46,7 +46,10 @@ class SplitConformalClassifier:
     conditional behaviour with width; ``lac`` buys width with conditional
     behaviour. Neither promises coverage within a class -- a rare or hard
     label can be under-covered while easy labels make up the average. For
-    a threshold per label, see :class:`MondrianConformalClassifier`.
+    a threshold per label, see :class:`MondrianConformalClassifier`. When
+    the stream is not exchangeable, see
+    :class:`~conformal_kit.aci.AdaptiveConformalClassifier`, which adapts
+    the miscoverage level online so long-run coverage tracks ``1 - alpha``.
 
     ``aps`` here is the deterministic variant, which over-covers rather than
     hitting the target exactly: sets never come back empty, and the score

@@ -13,7 +13,7 @@ from . import __version__
 from .evaluation import interval_coverage_report
 from .regression import SplitConformalRegressor
 
-__all__ = ["main", "build_parser"]
+__all__ = ["build_parser", "main"]
 
 
 def _read_columns(path, required):
@@ -64,7 +64,7 @@ def _cmd_calibrate(args):
         "alpha": args.alpha,
         "target_coverage": 1.0 - args.alpha,
         "n_calibration": model.n_calibration_,
-        "n_test": int(len(lower)),
+        "n_test": len(lower),
         "interval_width": model.width,
     }
     if args.json:

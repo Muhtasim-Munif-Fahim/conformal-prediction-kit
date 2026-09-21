@@ -74,7 +74,10 @@ class SplitConformalRegressor:
     conformalizes the lower and upper bounds directly. When holding out a
     calibration set is too expensive, see
     :class:`~conformal_kit.jackknife.JackknifePlusRegressor`, which refits
-    leave-one-out or K-fold so every point still trains a model.
+    leave-one-out or K-fold so every point still trains a model. When the
+    stream is not exchangeable, see
+    :class:`~conformal_kit.aci.AdaptiveConformalRegressor`, which adapts
+    the miscoverage level online so long-run coverage tracks ``1 - alpha``.
     """
 
     def __init__(self, alpha=0.1, normalize=False):

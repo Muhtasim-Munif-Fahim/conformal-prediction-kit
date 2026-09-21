@@ -13,9 +13,9 @@ import math
 import numpy as np
 
 __all__ = [
+    "coverage_by_group",
     "interval_coverage_report",
     "set_coverage_report",
-    "coverage_by_group",
 ]
 
 
