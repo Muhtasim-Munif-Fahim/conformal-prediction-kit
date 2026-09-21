@@ -105,7 +105,7 @@ class TestSplitConformalRegressor:
 
     def test_reading_width_before_fitting_is_an_error(self):
         with pytest.raises(RuntimeError, match="fit must be called"):
-            SplitConformalRegressor().width
+            _ = SplitConformalRegressor().width
 
     def test_mismatched_calibration_lengths_are_rejected(self):
         with pytest.raises(ValueError, match="same length"):

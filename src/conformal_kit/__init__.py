@@ -1,5 +1,12 @@
 """Distribution-free uncertainty quantification via conformal prediction."""
 
+from .aci import (
+    AdaptiveConformalClassifier,
+    AdaptiveConformalRegressor,
+    AdaptiveConformalUpdater,
+    aci_update,
+    adaptive_conformal_quantile,
+)
 from .classification import (
     MondrianConformalClassifier,
     SplitConformalClassifier,
@@ -17,12 +24,17 @@ from .regression import SplitConformalRegressor, conformal_quantile
 __version__ = "0.1.0"
 
 __all__ = [
+    "AdaptiveConformalClassifier",
+    "AdaptiveConformalRegressor",
+    "AdaptiveConformalUpdater",
     "ConformalizedQuantileRegressor",
     "JackknifePlusRegressor",
     "MondrianConformalClassifier",
     "SplitConformalClassifier",
     "SplitConformalRegressor",
     "__version__",
+    "aci_update",
+    "adaptive_conformal_quantile",
     "conformal_quantile",
     "coverage_by_group",
     "cqr_scores",
