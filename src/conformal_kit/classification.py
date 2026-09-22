@@ -47,7 +47,10 @@ class SplitConformalClassifier:
     behaviour. Neither promises coverage within a class -- a rare or hard
     label can be under-covered while easy labels make up the average. For
     a threshold per label, see :class:`MondrianConformalClassifier`. When
-    the stream is not exchangeable, see
+    holding out a calibration set is too expensive, see
+    :class:`~conformal_kit.cross_conformal.CrossConformalClassifier`, which
+    refits leave-one-out or K-fold and keeps a label when its cross-conformal
+    p-value exceeds ``alpha``. When the stream is not exchangeable, see
     :class:`~conformal_kit.aci.AdaptiveConformalClassifier`, which adapts
     the miscoverage level online so long-run coverage tracks ``1 - alpha``.
 

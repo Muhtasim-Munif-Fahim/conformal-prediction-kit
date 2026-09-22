@@ -13,6 +13,11 @@ from .classification import (
     mondrian_quantiles,
 )
 from .cqr import ConformalizedQuantileRegressor, cqr_scores
+from .cross_conformal import (
+    CrossConformalClassifier,
+    cross_conformal_p_values,
+    cross_conformal_sets,
+)
 from .evaluation import (
     coverage_by_group,
     interval_coverage_report,
@@ -28,6 +33,7 @@ __all__ = [
     "AdaptiveConformalRegressor",
     "AdaptiveConformalUpdater",
     "ConformalizedQuantileRegressor",
+    "CrossConformalClassifier",
     "JackknifePlusRegressor",
     "MondrianConformalClassifier",
     "SplitConformalClassifier",
@@ -38,6 +44,8 @@ __all__ = [
     "conformal_quantile",
     "coverage_by_group",
     "cqr_scores",
+    "cross_conformal_p_values",
+    "cross_conformal_sets",
     "interval_coverage_report",
     "jackknife_plus_interval",
     "mondrian_quantiles",
