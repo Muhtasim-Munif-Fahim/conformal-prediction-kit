@@ -14,7 +14,8 @@ The finite-sample guarantee is ``1 - 2 * alpha`` rather than ``1 - alpha``.
 In practice the intervals usually sit close to the split-conformal target;
 the extra ``alpha`` is the price of not holding data out. sklearn is not
 required: pass a duck-typed ``fit`` / ``predict`` estimator or a trainer
-callable that returns a predictor.
+callable that returns a predictor. For classification sets built the same
+way, see :class:`~conformal_kit.cross_conformal.CrossConformalClassifier`.
 """
 
 from __future__ import annotations

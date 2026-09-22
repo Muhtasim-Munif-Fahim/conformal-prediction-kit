@@ -81,8 +81,9 @@ def set_coverage_report(y_true, prediction_sets, alpha=0.1, groups=None):
     """Measure empirical coverage and size of classification prediction sets.
 
     ``prediction_sets`` is the boolean ``(n_samples, n_classes)`` mask from
-    :meth:`~conformal_kit.classification.SplitConformalClassifier.predict_set`
-    or :meth:`~conformal_kit.classification.MondrianConformalClassifier.predict_set`.
+    :meth:`~conformal_kit.classification.SplitConformalClassifier.predict_set`,
+    :meth:`~conformal_kit.classification.MondrianConformalClassifier.predict_set`,
+    or :meth:`~conformal_kit.cross_conformal.CrossConformalClassifier.predict_set`.
     Returns the same coverage fields as :func:`interval_coverage_report`
     plus ``mean_set_size``, ``median_set_size`` and ``singleton_rate`` --
     the share of points the model resolved to exactly one class, which is
