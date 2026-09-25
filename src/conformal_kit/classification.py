@@ -40,7 +40,10 @@ class SplitConformalClassifier:
         probability until their total passes a threshold, so the score
         reflects how much probability mass had to be swept up to reach the
         truth. Sets are larger on average but adapt to each point, spreading
-        coverage far more evenly across easy and hard inputs.
+        coverage far more evenly across easy and hard inputs. The same score
+        is exposed as :class:`~conformal_kit.aps.APSClassifier`. The
+        regularized form, which penalizes classes past a chosen rank, is
+        :class:`~conformal_kit.aps.RAPSClassifier`.
 
     Both guarantee at least ``1 - alpha`` *marginal* coverage. ``aps`` buys
     conditional behaviour with width; ``lac`` buys width with conditional

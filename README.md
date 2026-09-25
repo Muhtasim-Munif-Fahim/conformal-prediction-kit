@@ -102,6 +102,39 @@ Both give *marginal* coverage: the average over all test points is at least `1 -
 
 `method="aps"` is the inductive split form of adaptive prediction sets (Romano, Sesia, Candès 2020): calibrate the cumulative-probability score on a held-out set, then return the label set at the target coverage. The probabilities have to come from a model that did not train on those calibration rows.
 
+## APS and regularized APS (RAPS)
+
+`APSClassifier` is that same split-conformal adaptive prediction set under its own name. The nonconformity of a label is the cumulative softmax (or probability) mass swept up in descending order until the label is included. `predict_set` and `predict` return the same boolean mask: a class is in the set when its score is at most the calibrated quantile.
+
+`RAPSClassifier` is regularized APS (Angelopoulos, Bates, Malik, Jordan 2021). The score gains a penalty once a label's rank passes `k_reg`:
+
+```text
+score(y) = cumulative mass through y + penalty * max(rank(y) - k_reg, 0)
+```
+
+`rank` starts at 1 for the most probable class. `penalty=0`, or a `k_reg` at least as large as the number of classes, is exactly APS. A positive penalty drops classes that only just cleared the threshold, which is how RAPS shortens sets when the softmax is diffuse. The quantile is computed from the penalized calibration scores, so marginal coverage stays at least `1 - alpha` under exchangeability. Sets stay reproducible; the randomized last-class draw that would land closer to the target is the same one split APS leaves out.
+
+```python
+from conformal_kit import APSClassifier, RAPSClassifier, set_coverage_report
+
+aps = APSClassifier(alpha=0.1).fit(y_calibration, calibration_probabilities)
+raps = RAPSClassifier(alpha=0.1, penalty=0.01, k_reg=1).fit(
+    y_calibration, calibration_probabilities
+)
+mask = raps.predict(test_probabilities)
+report = set_coverage_report(y_test, mask, alpha=0.1)
+```
+
+`penalty` and `k_reg` change set size, not the guarantee. Leave `k_reg=1` to penalize everything past the top class. Raise `penalty` when the sets are still longer than you can use. The same mask works with `set_coverage_report`.
+
+From the command line, pass one column per class probability:
+
+```bash
+conformal-kit classify --calibration cal.csv --test test.csv --alpha 0.1 --method raps
+```
+
+`cal.csv` needs `y_true,p0,p1,...`. `test.csv` needs `p0,p1,...`, and may also carry `y_true` — when it does, the command prints a coverage report and exits nonzero if that coverage misses the target. `--method aps` is the unregularized score. `--penalty` and `--k-reg` apply only to `raps` (defaults `0.01` and `1`).
+
 ## Mondrian: class-conditional prediction sets
 
 Mondrian conformal prediction (Vovk, Lindsay, Nouretdinov, Gammerman) gives each label its own threshold. Calibration scores are grouped by the true class and the finite-sample quantile is taken inside each group, so coverage holds *given the true label*, not only on average.
@@ -125,7 +158,7 @@ Use split conformal when you only need average coverage. Use Mondrian when a mis
 
 Split APS and LAC already cover the inductive case, where a fitted model and a held-out probability matrix are enough. Cross-conformal prediction (Vovk 2015) is the route that does not hold data out. Each training point is scored by a model that never saw it, and a candidate label is kept when its p-value clears `alpha`. `n_splits=None` is leave-one-out; `n_splits=K` is K-fold CV+, the same split of labour as jackknife+ versus CV+ for regression.
 
-Regularized APS (RAPS) is not a separate method here. The library already had split APS, so this is the cross-validation counterpart rather than a second split-conformal score.
+Regularized APS (RAPS) is a split-conformal score, on `RAPSClassifier`, not a cross-validation one. This section stays the route that does not hold data out.
 
 ```python
 from conformal_kit import CrossConformalClassifier
@@ -206,8 +239,11 @@ report["within_tolerance"]  # whether that is consistent with the target
 
 ```bash
 conformal-kit calibrate --calibration cal.csv --test test.csv --alpha 0.1
+conformal-kit classify --calibration cal.csv --test test.csv --alpha 0.1 --method raps
 conformal-kit evaluate --predictions intervals.csv --alpha 0.1
 ```
+
+`calibrate` reads `y_true,y_pred` and writes regression intervals. `classify` reads `y_true,p0,p1,...` and writes a prediction set per row (`--method aps` or `--method raps`). `evaluate` scores an interval file. The two input layouts are not interchangeable.
 
 ## Demo
 

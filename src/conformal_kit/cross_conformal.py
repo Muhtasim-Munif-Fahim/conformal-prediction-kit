@@ -11,8 +11,9 @@ that held it out, and the prediction set is read off cross-conformal p-values.
 the classification counterpart of CV+. Both are Vovk's cross-conformal
 predictor (2015) with deterministic tie-breaking. The finite-sample guarantee
 is the jackknife+ one, about ``1 - 2 * alpha``, not split conformal's
-``1 - alpha``. Regularized APS (RAPS) is not implemented: split APS was
-already present, and this module is the cross-validation route instead.
+``1 - alpha``. Regularized APS lives on
+:class:`~conformal_kit.aps.RAPSClassifier` as a split-conformal score.
+This module stays the route that does not hold a calibration set out.
 """
 
 from __future__ import annotations
