@@ -157,3 +157,129 @@ class TestRoundTrip:
         capsys.readouterr()
         assert main(["evaluate", "--predictions", str(scored)]) == 0
         assert "meets target" in capsys.readouterr().out
+
+
+def _class_rows(labels, probabilities):
+    rows = []
+    for label, probs in zip(labels, probabilities):
+        rows.append([int(label), *probs])
+    return rows
+
+
+def _calibrated_class_problem(n=800, k=4, seed=0):
+    rng = np.random.default_rng(seed)
+    logits = rng.normal(0.0, 1.0, size=(n, k))
+    shifted = logits - logits.max(axis=1, keepdims=True)
+    probabilities = np.exp(shifted)
+    probabilities /= probabilities.sum(axis=1, keepdims=True)
+    labels = np.argmax(np.log(probabilities) + rng.gumbel(size=probabilities.shape), axis=1)
+    return labels.astype(int), probabilities
+
+
+class TestClassify:
+    def test_aps_json_reports_the_quantile(self, tmp_path, capsys):
+        labels, probabilities = _calibrated_class_problem(n=80, seed=2)
+        header = ["y_true", "p0", "p1", "p2", "p3"]
+        calibration = _write_csv(
+            tmp_path / "cal.csv", header, _class_rows(labels[:40], probabilities[:40])
+        )
+        test = _write_csv(
+            tmp_path / "test.csv", header[1:], [row[1:] for row in _class_rows(labels[40:], probabilities[40:])]
+        )
+        assert main(["classify", "--calibration", calibration, "--test", test, "--json"]) == 0
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["method"] == "aps"
+        assert payload["n_calibration"] == 40
+        assert payload["n_test"] == 40
+        assert payload["quantile"] > 0
+
+    def test_raps_with_labels_meets_the_coverage_target(self, tmp_path, capsys):
+        labels, probabilities = _calibrated_class_problem(n=2000, seed=3)
+        header = ["y_true"] + [f"p{i}" for i in range(4)]
+        calibration = _write_csv(
+            tmp_path / "cal.csv", header, _class_rows(labels[:1000], probabilities[:1000])
+        )
+        test = _write_csv(
+            tmp_path / "test.csv", header, _class_rows(labels[1000:], probabilities[1000:])
+        )
+        code = main([
+            "classify", "--calibration", calibration, "--test", test,
+            "--method", "raps", "--penalty", "0.05", "--k-reg", "1",
+        ])
+        assert code == 0
+        out = capsys.readouterr().out
+        assert "meets target" in out
+        assert "(raps)" in out
+
+    def test_out_writes_membership(self, tmp_path, capsys):
+        header = ["y_true", "p0", "p1"]
+        calibration = _write_csv(
+            tmp_path / "cal.csv", header, [[0, 0.75, 0.25]] * 20
+        )
+        test = _write_csv(tmp_path / "test.csv", ["p0", "p1"], [[0.6, 0.4]] * 5)
+        destination = tmp_path / "sets.csv"
+        assert main([
+            "classify", "--calibration", calibration, "--test", test,
+            "--method", "aps", "--out", str(destination),
+        ]) == 0
+        assert "Wrote" in capsys.readouterr().out
+        with open(destination, newline="", encoding="utf-8") as handle:
+            rows = list(csv.DictReader(handle))
+        assert len(rows) == 5
+        assert set(rows[0]) == {"in_0", "in_1", "set", "size"}
+        for row in rows:
+            assert row["in_0"] == "1"
+            assert int(row["size"]) >= 1
+
+    def test_a_miss_on_the_test_labels_exits_nonzero(self, tmp_path, capsys):
+        calibration = _write_csv(
+            tmp_path / "cal.csv", ["y_true", "p0", "p1"], [[0, 0.8, 0.2]] * 30
+        )
+        # The set keeps class 0; every test label is class 1.
+        test = _write_csv(
+            tmp_path / "test.csv", ["y_true", "p0", "p1"], [[1, 0.8, 0.2]] * 30
+        )
+        assert main(["classify", "--calibration", calibration, "--test", test]) == 1
+        assert "BELOW TARGET" in capsys.readouterr().out
+
+    def test_penalty_is_rejected_for_aps(self, tmp_path, capsys):
+        calibration = _write_csv(
+            tmp_path / "cal.csv", ["y_true", "p0", "p1"], [[0, 0.7, 0.3]] * 20
+        )
+        test = _write_csv(tmp_path / "test.csv", ["p0", "p1"], [[0.6, 0.4]])
+        code = main([
+            "classify", "--calibration", calibration, "--test", test,
+            "--method", "aps", "--penalty", "0.1",
+        ])
+        assert code == 2
+        assert "only to --method raps" in capsys.readouterr().err
+
+    def test_a_missing_probability_column_is_reported(self, tmp_path, capsys):
+        calibration = _write_csv(tmp_path / "cal.csv", ["y_true", "p0"], [[0, 1.0]])
+        test = _write_csv(tmp_path / "test.csv", ["p0", "p1"], [[0.5, 0.5]])
+        assert main(["classify", "--calibration", calibration, "--test", test]) == 2
+        assert "probability columns" in capsys.readouterr().err
+
+    def test_a_hole_in_the_probability_columns_is_reported(self, tmp_path, capsys):
+        calibration = _write_csv(
+            tmp_path / "cal.csv", ["y_true", "p0", "p2"], [[0, 0.5, 0.5]]
+        )
+        test = _write_csv(tmp_path / "test.csv", ["p0", "p1"], [[0.5, 0.5]])
+        assert main(["classify", "--calibration", calibration, "--test", test]) == 2
+        assert "missing column(s): p1" in capsys.readouterr().err
+
+    def test_a_missing_calibration_label_is_reported(self, tmp_path, capsys):
+        calibration = _write_csv(tmp_path / "cal.csv", ["p0", "p1"], [[0.5, 0.5]])
+        test = _write_csv(tmp_path / "test.csv", ["p0", "p1"], [[0.5, 0.5]])
+        assert main(["classify", "--calibration", calibration, "--test", test]) == 2
+        assert "missing column(s): y_true" in capsys.readouterr().err
+
+    def test_a_fractional_label_names_the_line(self, tmp_path, capsys):
+        calibration = _write_csv(
+            tmp_path / "cal.csv", ["y_true", "p0", "p1"], [[1.5, 0.5, 0.5]]
+        )
+        test = _write_csv(tmp_path / "test.csv", ["p0", "p1"], [[0.5, 0.5]])
+        assert main(["classify", "--calibration", calibration, "--test", test]) == 2
+        err = capsys.readouterr().err
+        assert "line 2" in err
+        assert "integer class index" in err

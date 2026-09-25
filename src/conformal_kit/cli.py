@@ -10,7 +10,8 @@ import sys
 import numpy as np
 
 from . import __version__
-from .evaluation import interval_coverage_report
+from .aps import APSClassifier, RAPSClassifier
+from .evaluation import interval_coverage_report, set_coverage_report
 from .regression import SplitConformalRegressor
 
 __all__ = ["build_parser", "main"]
@@ -79,6 +80,141 @@ def _cmd_calibrate(args):
     return 0
 
 
+def _probability_column_names(fieldnames, path):
+    """Return ``p0, p1, ...`` in order, or raise if the block has a hole."""
+    present = set()
+    for name in fieldnames:
+        if len(name) > 1 and name[0] == "p" and name[1:].isdigit():
+            present.add(int(name[1:]))
+    if not present or 0 not in present:
+        raise ValueError(f"{path} is missing probability columns p0,p1,...")
+    last = max(present)
+    missing = [f"p{index}" for index in range(last + 1) if index not in present]
+    if missing:
+        raise ValueError(f"{path} is missing column(s): {', '.join(missing)}")
+    if last < 1:
+        raise ValueError(f"{path} is missing probability columns p0,p1,...")
+    return [f"p{index}" for index in range(last + 1)]
+
+
+def _read_class_csv(path):
+    """Read ``y_true`` (optional) and ``p0,p1,...`` probability columns.
+
+    ``y_true`` is required for calibration and optional for a test file.
+    Probability columns must be a contiguous block starting at ``p0``.
+    """
+    try:
+        with open(path, newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            fieldnames = list(reader.fieldnames or [])
+            prob_names = _probability_column_names(fieldnames, path)
+            has_labels = "y_true" in fieldnames
+            wanted = (["y_true"] if has_labels else []) + prob_names
+            columns = {name: [] for name in wanted}
+            for line, row in enumerate(reader, start=2):
+                for name in wanted:
+                    raw = row.get(name)
+                    try:
+                        value = float(raw)
+                    except (TypeError, ValueError):
+                        raise ValueError(
+                            f"{path} line {line}: column '{name}' is not a number: {raw!r}"
+                        ) from None
+                    if name == "y_true" and abs(value - round(value)) > 1e-8:
+                        raise ValueError(
+                            f"{path} line {line}: column 'y_true' is not an "
+                            f"integer class index: {raw!r}"
+                        )
+                    columns[name].append(value)
+    except OSError as exc:
+        raise ValueError(f"could not read {path}: {exc}") from None
+    if not columns[prob_names[0]]:
+        raise ValueError(f"{path} contains no data rows")
+    probabilities = np.column_stack([columns[name] for name in prob_names])
+    labels = None
+    if has_labels:
+        labels = np.rint(columns["y_true"]).astype(int)
+    return labels, probabilities
+
+
+def _cmd_classify(args):
+    """Calibrate APS or RAPS on one CSV and write prediction sets for another."""
+    if args.method == "aps" and (args.penalty is not None or args.k_reg is not None):
+        raise ValueError("--penalty and --k-reg apply only to --method raps")
+
+    cal_labels, cal_probabilities = _read_class_csv(args.calibration)
+    if cal_labels is None:
+        raise ValueError(f"{args.calibration} is missing column(s): y_true")
+    test_labels, test_probabilities = _read_class_csv(args.test)
+
+    if args.method == "aps":
+        model = APSClassifier(alpha=args.alpha).fit(cal_labels, cal_probabilities)
+    else:
+        penalty = 0.01 if args.penalty is None else args.penalty
+        k_reg = 1 if args.k_reg is None else args.k_reg
+        model = RAPSClassifier(alpha=args.alpha, penalty=penalty, k_reg=k_reg).fit(
+            cal_labels, cal_probabilities
+        )
+
+    mask = model.predict(test_probabilities)
+    sizes = mask.sum(axis=1)
+    label_lists = [np.flatnonzero(row).tolist() for row in mask]
+
+    if args.out:
+        n_classes = mask.shape[1]
+        header = [f"in_{index}" for index in range(n_classes)] + ["set", "size"]
+        with open(args.out, "w", newline="", encoding="utf-8") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(header)
+            for row, included, size in zip(mask, label_lists, sizes):
+                membership = [int(flag) for flag in row]
+                rendered = " ".join(str(label) for label in included)
+                writer.writerow(membership + [rendered, int(size)])
+
+    summary = {
+        "alpha": args.alpha,
+        "method": args.method,
+        "target_coverage": 1.0 - args.alpha,
+        "n_calibration": model.n_calibration_,
+        "n_test": int(mask.shape[0]),
+        "n_classes": int(mask.shape[1]),
+        "quantile": model.quantile_,
+        "mean_set_size": float(sizes.mean()),
+    }
+    if args.method == "raps":
+        summary["penalty"] = model.penalty
+        summary["k_reg"] = model.k_reg
+
+    report = None
+    if test_labels is not None:
+        report = set_coverage_report(test_labels, mask, alpha=args.alpha)
+        summary["coverage"] = report["coverage"]
+        summary["within_tolerance"] = report["within_tolerance"]
+        summary["median_set_size"] = report["median_set_size"]
+        summary["singleton_rate"] = report["singleton_rate"]
+
+    if args.json:
+        print(json.dumps(summary, indent=2))
+    else:
+        print(
+            f"Calibrated on {summary['n_calibration']} points at "
+            f"alpha={args.alpha} ({args.method})"
+        )
+        print(f"Target coverage : {summary['target_coverage']:.1%}")
+        print(f"Quantile        : {summary['quantile']:.6g}")
+        print(f"Mean set size   : {summary['mean_set_size']:.6g}")
+        if report is not None:
+            print(f"Coverage        : {report['coverage']:.3%}")
+            verdict = "meets target" if report["within_tolerance"] else "BELOW TARGET"
+            print(f"Verdict         : {verdict}")
+        print(f"Sets written for {summary['n_test']} test predictions")
+        if args.out:
+            print(f"Wrote {args.out}")
+    if report is not None and not report["within_tolerance"]:
+        return 1
+    return 0
+
+
 def _cmd_evaluate(args):
     """Report empirical coverage for a CSV of intervals."""
     data = _read_columns(args.predictions, ["y_true", "lower", "upper"])
@@ -103,7 +239,10 @@ def _cmd_evaluate(args):
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="conformal-kit",
-        description="Distribution-free prediction intervals with coverage guarantees",
+        description=(
+            "Distribution-free prediction intervals and prediction sets "
+            "with coverage guarantees"
+        ),
     )
     parser.add_argument("--version", action="version", version=__version__)
     sub = parser.add_subparsers(dest="command")
@@ -116,6 +255,42 @@ def build_parser():
     calibrate.add_argument("--alpha", type=float, default=0.1, help="1 - target coverage")
     calibrate.add_argument("--out", default=None, help="Write intervals to this CSV")
     calibrate.add_argument("--json", action="store_true", help="Emit JSON")
+
+    classify = sub.add_parser(
+        "classify",
+        help="Calibrate APS or RAPS and emit test prediction sets",
+    )
+    classify.add_argument(
+        "--calibration",
+        required=True,
+        help="CSV with y_true,p0,p1,... class probabilities",
+    )
+    classify.add_argument(
+        "--test",
+        required=True,
+        help="CSV with p0,p1,... and optional y_true",
+    )
+    classify.add_argument(
+        "--method",
+        choices=("aps", "raps"),
+        default="aps",
+        help="aps is cumulative probability; raps adds a rank penalty",
+    )
+    classify.add_argument("--alpha", type=float, default=0.1, help="1 - target coverage")
+    classify.add_argument(
+        "--penalty",
+        type=float,
+        default=None,
+        help="RAPS penalty per rank past k-reg (default 0.01)",
+    )
+    classify.add_argument(
+        "--k-reg",
+        type=int,
+        default=None,
+        help="RAPS leaves the first k ranks unpenalized (default 1)",
+    )
+    classify.add_argument("--out", default=None, help="Write prediction sets to this CSV")
+    classify.add_argument("--json", action="store_true", help="Emit JSON")
 
     evaluate = sub.add_parser(
         "evaluate", help="Report empirical coverage for a CSV of intervals"
@@ -139,7 +314,11 @@ def main(argv=None):
         print("--alpha must be strictly between 0 and 1", file=sys.stderr)
         return 2
 
-    handler = {"calibrate": _cmd_calibrate, "evaluate": _cmd_evaluate}[args.command]
+    handler = {
+        "calibrate": _cmd_calibrate,
+        "classify": _cmd_classify,
+        "evaluate": _cmd_evaluate,
+    }[args.command]
     try:
         return handler(args)
     except ValueError as exc:

@@ -7,6 +7,7 @@ from .aci import (
     aci_update,
     adaptive_conformal_quantile,
 )
+from .aps import APSClassifier, RAPSClassifier, aps_scores, raps_scores
 from .classification import (
     MondrianConformalClassifier,
     SplitConformalClassifier,
@@ -29,6 +30,7 @@ from .regression import SplitConformalRegressor, conformal_quantile
 __version__ = "0.1.0"
 
 __all__ = [
+    "APSClassifier",
     "AdaptiveConformalClassifier",
     "AdaptiveConformalRegressor",
     "AdaptiveConformalUpdater",
@@ -36,11 +38,13 @@ __all__ = [
     "CrossConformalClassifier",
     "JackknifePlusRegressor",
     "MondrianConformalClassifier",
+    "RAPSClassifier",
     "SplitConformalClassifier",
     "SplitConformalRegressor",
     "__version__",
     "aci_update",
     "adaptive_conformal_quantile",
+    "aps_scores",
     "conformal_quantile",
     "coverage_by_group",
     "cqr_scores",
@@ -49,5 +53,6 @@ __all__ = [
     "interval_coverage_report",
     "jackknife_plus_interval",
     "mondrian_quantiles",
+    "raps_scores",
     "set_coverage_report",
 ]
