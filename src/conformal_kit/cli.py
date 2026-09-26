@@ -9,10 +9,12 @@ import sys
 
 import numpy as np
 
+from collections import deque
+
 from . import __version__
 from .aps import APSClassifier, RAPSClassifier
+from .enbpi import enbpi_interval
 from .evaluation import interval_coverage_report, set_coverage_report
-from .enbpi import EnbPIRegressor
 from .regression import SplitConformalRegressor
 
 __all__ = ["build_parser", "main"]
@@ -249,12 +251,10 @@ def _cmd_enbpi(args):
     split = args.train_size
     if not 0.0 < split < 1.0:
         raise ValueError("--train-size must be strictly between 0 and 1")
-    n_train = max(1, min(n - 1, int(round(split * n))))
+    n_train = max(1, min(n - 1, round(split * n)))
     residuals = np.abs(y_true[:n_train] - y_pred[:n_train])
     lowers = []
     uppers = []
-    from collections import deque
-    from .enbpi import enbpi_interval
 
     pool = deque(residuals.tolist(), maxlen=args.max_resid)
     for i in range(n_train, n):
