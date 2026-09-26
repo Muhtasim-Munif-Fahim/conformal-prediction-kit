@@ -19,6 +19,7 @@ from .cross_conformal import (
     cross_conformal_p_values,
     cross_conformal_sets,
 )
+from .enbpi import EnbPIRegressor, enbpi_interval, enbpi_quantile
 from .evaluation import (
     coverage_by_group,
     interval_coverage_report,
@@ -36,6 +37,7 @@ __all__ = [
     "AdaptiveConformalUpdater",
     "ConformalizedQuantileRegressor",
     "CrossConformalClassifier",
+    "EnbPIRegressor",
     "JackknifePlusRegressor",
     "MondrianConformalClassifier",
     "RAPSClassifier",
@@ -48,6 +50,8 @@ __all__ = [
     "conformal_quantile",
     "coverage_by_group",
     "cqr_scores",
+    "enbpi_interval",
+    "enbpi_quantile",
     "cross_conformal_p_values",
     "cross_conformal_sets",
     "interval_coverage_report",
