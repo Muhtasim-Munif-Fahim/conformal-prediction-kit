@@ -12,6 +12,7 @@ import numpy as np
 from . import __version__
 from .aps import APSClassifier, RAPSClassifier
 from .evaluation import interval_coverage_report, set_coverage_report
+from .enbpi import EnbPIRegressor
 from .regression import SplitConformalRegressor
 
 __all__ = ["build_parser", "main"]
@@ -236,6 +237,63 @@ def _cmd_evaluate(args):
     return 0 if report["within_tolerance"] else 1
 
 
+
+def _cmd_enbpi(args):
+    """Build EnbPI intervals from sequential y_true/y_pred residuals."""
+    data = _read_columns(args.data, ["y_true", "y_pred"])
+    y_true = data["y_true"]
+    y_pred = data["y_pred"]
+    n = y_true.size
+    if n < 2:
+        raise ValueError("enbpi needs at least two rows")
+    split = args.train_size
+    if not 0.0 < split < 1.0:
+        raise ValueError("--train-size must be strictly between 0 and 1")
+    n_train = max(1, min(n - 1, int(round(split * n))))
+    residuals = np.abs(y_true[:n_train] - y_pred[:n_train])
+    lowers = []
+    uppers = []
+    from collections import deque
+    from .enbpi import enbpi_interval
+
+    pool = deque(residuals.tolist(), maxlen=args.max_resid)
+    for i in range(n_train, n):
+        lower, upper = enbpi_interval(y_pred[i], np.asarray(pool, dtype=float), args.alpha)
+        lowers.append(lower)
+        uppers.append(upper)
+        pool.append(abs(float(y_true[i]) - float(y_pred[i])))
+
+    if args.out:
+        with open(args.out, "w", newline="", encoding="utf-8") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["y_true", "y_pred", "lower", "upper"])
+            for i, (lo, hi) in enumerate(zip(lowers, uppers)):
+                idx = n_train + i
+                writer.writerow([y_true[idx], y_pred[idx], lo, hi])
+
+    covered = [
+        float(lo <= y_true[n_train + i] <= hi)
+        for i, (lo, hi) in enumerate(zip(lowers, uppers))
+    ]
+    summary = {
+        "alpha": args.alpha,
+        "target_coverage": 1.0 - args.alpha,
+        "n_train": n_train,
+        "n_test": len(lowers),
+        "empirical_coverage": float(np.mean(covered)) if covered else None,
+    }
+    if args.json:
+        print(json.dumps(summary, indent=2))
+    else:
+        print(f"EnbPI on {summary['n_test']} steps after {n_train} burn-in rows")
+        print(f"Target coverage : {summary['target_coverage']:.1%}")
+        if summary["empirical_coverage"] is not None:
+            print(f"Empirical cover : {summary['empirical_coverage']:.1%}")
+        if args.out:
+            print(f"Wrote {args.out}")
+    return 0
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="conformal-kit",
@@ -292,6 +350,27 @@ def build_parser():
     classify.add_argument("--out", default=None, help="Write prediction sets to this CSV")
     classify.add_argument("--json", action="store_true", help="Emit JSON")
 
+    enbpi = sub.add_parser(
+        "enbpi",
+        help="Sequential EnbPI intervals from a CSV of y_true,y_pred",
+    )
+    enbpi.add_argument("--data", required=True, help="CSV with y_true,y_pred in time order")
+    enbpi.add_argument("--alpha", type=float, default=0.1, help="1 - target coverage")
+    enbpi.add_argument(
+        "--train-size",
+        type=float,
+        default=0.5,
+        help="Fraction of rows used to seed the residual pool",
+    )
+    enbpi.add_argument(
+        "--max-resid",
+        type=int,
+        default=None,
+        help="Sliding residual pool length (default: keep all)",
+    )
+    enbpi.add_argument("--out", default=None, help="Write intervals to this CSV")
+    enbpi.add_argument("--json", action="store_true", help="Emit JSON")
+
     evaluate = sub.add_parser(
         "evaluate", help="Report empirical coverage for a CSV of intervals"
     )
@@ -317,6 +396,7 @@ def main(argv=None):
     handler = {
         "calibrate": _cmd_calibrate,
         "classify": _cmd_classify,
+        "enbpi": _cmd_enbpi,
         "evaluate": _cmd_evaluate,
     }[args.command]
     try:
