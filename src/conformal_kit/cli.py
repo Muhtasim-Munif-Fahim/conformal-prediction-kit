@@ -6,16 +6,16 @@ import argparse
 import csv
 import json
 import sys
+from collections import deque
 
 import numpy as np
-
-from collections import deque
 
 from . import __version__
 from .aps import APSClassifier, RAPSClassifier
 from .enbpi import enbpi_interval
 from .evaluation import interval_coverage_report, set_coverage_report
 from .regression import SplitConformalRegressor
+from .weighted import WeightedConformalRegressor
 
 __all__ = ["build_parser", "main"]
 
@@ -78,6 +78,50 @@ def _cmd_calibrate(args):
         print(f"Target coverage : {summary['target_coverage']:.1%}")
         print(f"Interval width  : {summary['interval_width']:.6g}")
         print(f"Intervals written for {summary['n_test']} test predictions")
+        if args.out:
+            print(f"Wrote {args.out}")
+    return 0
+
+
+def _cmd_weighted(args):
+    """Weighted split conformal under covariate shift from two CSVs."""
+    weight = args.weight_column
+    calibration = _read_columns(args.calibration, ["y_true", "y_pred", weight])
+    test = _read_columns(args.test, ["y_pred", weight])
+
+    model = WeightedConformalRegressor(alpha=args.alpha).fit(
+        calibration["y_true"], calibration["y_pred"], calibration[weight]
+    )
+    lower, upper = model.predict_interval(test["y_pred"], test[weight])
+    widths = upper - lower
+    finite = np.isfinite(widths)
+
+    if args.out:
+        with open(args.out, "w", newline="", encoding="utf-8") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["y_pred", "weight", "lower", "upper"])
+            writer.writerows(zip(test["y_pred"], test[weight], lower, upper))
+
+    summary = {
+        "alpha": args.alpha,
+        "target_coverage": 1.0 - args.alpha,
+        "n_calibration": model.n_calibration_,
+        "effective_n_calibration": model.effective_n_,
+        "n_test": int(lower.size),
+        "n_infinite": int((~finite).sum()),
+        "median_finite_width": float(np.median(widths[finite])) if finite.any() else None,
+    }
+    if args.json:
+        print(json.dumps(summary, indent=2))
+    else:
+        print(
+            f"Calibrated on {summary['n_calibration']} weighted points at alpha={args.alpha} "
+            f"(effective n = {summary['effective_n_calibration']:.1f})"
+        )
+        print(f"Target coverage     : {summary['target_coverage']:.1%}")
+        if summary["median_finite_width"] is not None:
+            print(f"Median finite width : {summary['median_finite_width']:.6g}")
+        print(f"Infinite intervals  : {summary['n_infinite']} of {summary['n_test']}")
         if args.out:
             print(f"Wrote {args.out}")
     return 0
@@ -371,6 +415,23 @@ def build_parser():
     enbpi.add_argument("--out", default=None, help="Write intervals to this CSV")
     enbpi.add_argument("--json", action="store_true", help="Emit JSON")
 
+    weighted = sub.add_parser(
+        "weighted",
+        help="Weighted split conformal intervals under covariate shift",
+    )
+    weighted.add_argument(
+        "--calibration", required=True, help="CSV with y_true,y_pred,weight"
+    )
+    weighted.add_argument("--test", required=True, help="CSV with y_pred,weight")
+    weighted.add_argument(
+        "--weight-column",
+        default="weight",
+        help="Likelihood-ratio column name in both CSVs (default: weight)",
+    )
+    weighted.add_argument("--alpha", type=float, default=0.1, help="1 - target coverage")
+    weighted.add_argument("--out", default=None, help="Write intervals to this CSV")
+    weighted.add_argument("--json", action="store_true", help="Emit JSON")
+
     evaluate = sub.add_parser(
         "evaluate", help="Report empirical coverage for a CSV of intervals"
     )
@@ -398,6 +459,7 @@ def main(argv=None):
         "classify": _cmd_classify,
         "enbpi": _cmd_enbpi,
         "evaluate": _cmd_evaluate,
+        "weighted": _cmd_weighted,
     }[args.command]
     try:
         return handler(args)
