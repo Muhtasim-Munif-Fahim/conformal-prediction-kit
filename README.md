@@ -223,6 +223,48 @@ The same updater wraps classification scores (`lac` or `aps`) as `AdaptiveConfor
 
 ACI restores *long-run* coverage along the stream. It does not restore a finite-sample exchangeability guarantee on any one window, and it does not give class-conditional coverage. Right after a sudden shift the next few sets can miss while `alpha_t` catches up.
 
+## Weighted conformal: coverage under covariate shift
+
+Split conformal assumes calibration and test data are exchangeable. Under
+**covariate shift** the feature distribution moves (new region, new device mix,
+a different patient population) while `P(y | x)` stays the same, and plain
+split conformal quietly under-covers wherever the test data has drifted into
+harder regions. Weighted split conformal (Tibshirani, Barber, Candes, Ramdas
+2019) reweights each calibration score by the likelihood ratio
+`w(x) = dP_test(x) / dP_calibration(x)` and takes a weighted quantile, which
+restores the `1 - alpha` guarantee on the shifted distribution.
+
+```python
+from conformal_kit import (
+    WeightedConformalRegressor,
+    likelihood_ratio_from_probabilities,
+)
+
+# w(x) from a domain classifier trained on pooled features to predict
+# "is this row from the test pool?" (any probabilistic classifier works).
+w_cal = likelihood_ratio_from_probabilities(p_test_cal, n_cal, n_test, clip=0.01)
+w_test = likelihood_ratio_from_probabilities(p_test_new, n_cal, n_test, clip=0.01)
+
+model = WeightedConformalRegressor(alpha=0.1).fit(y_cal, pred_cal, w_cal)
+lower, upper = model.predict_interval(pred_test, w_test)
+model.effective_n_   # Kish effective sample size of the calibration weights
+```
+
+Each test point gets its own width, because its own weight enters the
+quantile. A test point whose weight dwarfs the calibration mass gets an
+**infinite** interval, which is the honest answer for extrapolation. With all
+weights equal the method reduces exactly to split conformal.
+`normalize=True` combines it with per-point difficulty scaling.
+`weighted_conformal_quantile` and `effective_sample_size` are exposed for
+custom score functions.
+
+```bash
+conformal-kit weighted --calibration cal.csv --test test.csv --alpha 0.1 --out intervals.csv
+```
+
+`cal.csv` holds `y_true,y_pred,weight` and `test.csv` holds `y_pred,weight`.
+Use `--weight-column` to pick a different column name.
+
 ## Evaluating coverage
 
 Coverage is a claim to be checked, not assumed:
@@ -241,6 +283,7 @@ report["within_tolerance"]  # whether that is consistent with the target
 conformal-kit calibrate --calibration cal.csv --test test.csv --alpha 0.1
 conformal-kit classify --calibration cal.csv --test test.csv --alpha 0.1 --method raps
 conformal-kit evaluate --predictions intervals.csv --alpha 0.1
+conformal-kit weighted --calibration cal.csv --test test.csv --alpha 0.1
 ```
 
 `calibrate` reads `y_true,y_pred` and writes regression intervals. `classify` reads `y_true,p0,p1,...` and writes a prediction set per row (`--method aps` or `--method raps`). `evaluate` scores an interval file. The two input layouts are not interchangeable.
