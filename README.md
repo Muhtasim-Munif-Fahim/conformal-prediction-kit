@@ -265,6 +265,31 @@ conformal-kit weighted --calibration cal.csv --test test.csv --alpha 0.1 --out i
 `cal.csv` holds `y_true,y_pred,weight` and `test.csv` holds `y_pred,weight`.
 Use `--weight-column` to pick a different column name.
 
+## Conformal risk control: bounding expected loss
+
+Split conformal bounds the miscoverage probability. Conformal risk control
+(Angelopoulos, Bates, Fisch, Lei & Schuster 2022) bounds the expected value of
+any bounded loss that shrinks as a threshold `lambda` grows, picking
+
+`lambda_hat = inf { lambda : (n R_n(lambda) + B) / (n + 1) <= alpha }`
+
+so that `E[loss] <= alpha` at finite `n`. `MultilabelRiskController`
+applies it to multilabel classification: the set `{k : p_k >= 1 - lambda}`
+has expected false negative rate at most `alpha`. The search over `lambda`
+is exact because FNR only changes at the true labels' scores.
+
+```python
+from conformal_kit import MultilabelRiskController, false_negative_rate
+
+ctrl = MultilabelRiskController(alpha=0.1).fit(y_cal_multi_hot, p_cal)
+sets = ctrl.predict_set(p_test)           # boolean (n, n_labels)
+false_negative_rate(y_test_multi_hot, sets)  # about 0.1 or below
+ctrl.threshold_                            # probability cut-off 1 - lambda_hat
+```
+
+For any other monotone loss, build a `(n, m)` loss matrix over increasing
+candidate `lambdas` and call `conformal_risk_threshold(losses, lambdas, alpha)`.
+
 ## Evaluating coverage
 
 Coverage is a claim to be checked, not assumed:
