@@ -27,6 +27,11 @@ from .evaluation import (
 )
 from .jackknife import JackknifePlusRegressor, jackknife_plus_interval
 from .regression import SplitConformalRegressor, conformal_quantile
+from .risk_control import (
+    MultilabelRiskController,
+    conformal_risk_threshold,
+    false_negative_rate,
+)
 from .weighted import (
     WeightedConformalRegressor,
     effective_sample_size,
@@ -46,6 +51,7 @@ __all__ = [
     "EnbPIRegressor",
     "JackknifePlusRegressor",
     "MondrianConformalClassifier",
+    "MultilabelRiskController",
     "RAPSClassifier",
     "SplitConformalClassifier",
     "SplitConformalRegressor",
@@ -55,6 +61,7 @@ __all__ = [
     "adaptive_conformal_quantile",
     "aps_scores",
     "conformal_quantile",
+    "conformal_risk_threshold",
     "coverage_by_group",
     "cqr_scores",
     "cross_conformal_p_values",
@@ -62,6 +69,7 @@ __all__ = [
     "effective_sample_size",
     "enbpi_interval",
     "enbpi_quantile",
+    "false_negative_rate",
     "interval_coverage_report",
     "jackknife_plus_interval",
     "likelihood_ratio_from_probabilities",
