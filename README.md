@@ -290,6 +290,64 @@ ctrl.threshold_                            # probability cut-off 1 - lambda_hat
 For any other monotone loss, build a `(n, m)` loss matrix over increasing
 candidate `lambdas` and call `conformal_risk_threshold(losses, lambdas, alpha)`.
 
+## Ensemble Batch Prediction Intervals (EnbPI)
+
+Time series break the exchangeability assumption that split conformal, CQR and
+jackknife+ rely on. **EnbPI** (Xu and Xie, 2021) keeps a sliding pool of
+leave-one-bootstrap residuals from an ensemble and rebuilds the interval at
+every step from the most recent residuals. After each outcome arrives,
+`update` drops the oldest residual and appends the fresh one.
+
+```python
+from conformal_kit import EnbPIRegressor
+
+class MeanModel:
+    def fit(self, X, y):
+        self.mean_ = float(y.mean())
+        return self
+    def predict(self, X):
+        import numpy as np
+        return np.full(len(X), self.mean_)
+
+model = EnbPIRegressor(MeanModel(), alpha=0.1, n_estimators=20, max_resid=50, random_state=0)
+model.fit(X_train, y_train)
+for x_t, y_t in stream:
+    lower, upper = model.predict_interval(x_t.reshape(1, -1))
+    y_hat = float(model.predict(x_t.reshape(1, -1)))
+    model.update(y_true=y_t, y_pred=y_hat)
+```
+
+The CLI mirrors the sequential construction on a CSV of `y_true,y_pred`:
+
+```bash
+conformal-kit enbpi --data series.csv --alpha 0.1 --train-size 0.5 --out intervals.csv
+```
+
+## Venn-Abers: calibrated probabilities with a validity guarantee
+
+Prediction sets say which labels are plausible. **Inductive Venn-Abers
+predictors** (Vovk & Petej, 2014) give a calibrated *probability* instead.
+For each test score the calibration set is augmented once with label 0 and
+once with label 1, and an isotonic regression is fitted to each. The two
+fitted values form a pair `(p0, p1)` with `p0 <= p1`, and under
+exchangeability one of the two is perfectly calibrated. The gap
+`p1 - p0` is wide where calibration data are thin, so it doubles as an
+uncertainty signal. `predict_proba` merges the pair into a single
+probability, `p1 / (1 - p0 + p1)`, which is minimax-optimal for log loss.
+Probability matrices with more than two classes are calibrated one-vs-rest
+and then renormalized.
+
+```python
+from conformal_kit import VennAbersCalibrator, venn_abers_probabilities
+
+cal = VennAbersCalibrator().fit(p_cal[:, 1], y_cal)   # binary: positive-class scores
+p0, p1 = cal.predict_interval(p_test[:, 1])           # multiprobability pair
+probs = cal.predict_proba(p_test[:, 1])               # (n, 2) merged probabilities
+cal.interval_width(p_test[:, 1])                      # p1 - p0 per row
+
+VennAbersCalibrator().fit(p_cal, y_cal).predict_proba(p_test)  # multiclass, one-vs-rest
+```
+
 ## Evaluating coverage
 
 Coverage is a claim to be checked, not assumed:
@@ -325,41 +383,7 @@ Fits intervals on a heteroskedastic synthetic problem, compares standard, normal
 
 - Split conformal's coverage guarantee is **marginal**, averaged over test points. It does not promise coverage within a subgroup. Mondrian conformal is the exception for *class labels*: each class gets its own threshold, so coverage holds conditionally on the true label. Other subgroups (age, region, ...) are still not guaranteed; `interval_coverage_report` and `set_coverage_report` accept a `groups` argument so you can check that yourself.
 - Cross-conformal classification, like jackknife+ and CV+, guarantees about `1 - 2 * alpha` rather than `1 - alpha`. The gap is the price of training on every point. Split conformal remains exact at `1 - alpha` when a calibration set is available.
-- 
-## Ensemble Batch Prediction Intervals (EnbPI)
-
-Time series break the exchangeability assumption that split conformal, CQR and
-jackknife+ rely on. **EnbPI** (Xu and Xie, 2021) keeps a sliding pool of
-leave-one-bootstrap residuals from an ensemble and rebuilds the interval at
-every step from the most recent residuals. After each outcome arrives,
-`update` drops the oldest residual and appends the fresh one.
-
-```python
-from conformal_kit import EnbPIRegressor
-
-class MeanModel:
-    def fit(self, X, y):
-        self.mean_ = float(y.mean())
-        return self
-    def predict(self, X):
-        import numpy as np
-        return np.full(len(X), self.mean_)
-
-model = EnbPIRegressor(MeanModel(), alpha=0.1, n_estimators=20, max_resid=50, random_state=0)
-model.fit(X_train, y_train)
-for x_t, y_t in stream:
-    lower, upper = model.predict_interval(x_t.reshape(1, -1))
-    y_hat = float(model.predict(x_t.reshape(1, -1)))
-    model.update(y_true=y_t, y_pred=y_hat)
-```
-
-The CLI mirrors the sequential construction on a CSV of `y_true,y_pred`:
-
-```bash
-conformal-kit enbpi --data series.csv --alpha 0.1 --train-size 0.5 --out intervals.csv
-```
-
-Split conformal, CQR, jackknife+ and Mondrian assume **exchangeability**. Under distribution shift or on a time series with trend, that guarantee lapses. ACI is the exception for *long-run* coverage: `alpha_t` moves after every miss or hit so the average along the stream tracks `1 - alpha`, without assuming exchangeability. It does not restore conditional coverage, and a single window right after a shift can still under-cover.
+- Split conformal, CQR, jackknife+ and Mondrian assume **exchangeability**. Under distribution shift or on a time series with trend, that guarantee lapses. ACI is the exception for *long-run* coverage: `alpha_t` moves after every miss or hit so the average along the stream tracks `1 - alpha`, without assuming exchangeability. It does not restore conditional coverage, and a single window right after a shift can still under-cover.
 - It wraps a model, it does not improve one. A weak model gets valid but wide intervals.
 
 ## License

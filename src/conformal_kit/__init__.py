@@ -32,6 +32,7 @@ from .risk_control import (
     conformal_risk_threshold,
     false_negative_rate,
 )
+from .venn_abers import VennAbersCalibrator, venn_abers_probabilities
 from .weighted import (
     WeightedConformalRegressor,
     effective_sample_size,
@@ -55,6 +56,7 @@ __all__ = [
     "RAPSClassifier",
     "SplitConformalClassifier",
     "SplitConformalRegressor",
+    "VennAbersCalibrator",
     "WeightedConformalRegressor",
     "__version__",
     "aci_update",
@@ -76,5 +78,6 @@ __all__ = [
     "mondrian_quantiles",
     "raps_scores",
     "set_coverage_report",
+    "venn_abers_probabilities",
     "weighted_conformal_quantile",
 ]
