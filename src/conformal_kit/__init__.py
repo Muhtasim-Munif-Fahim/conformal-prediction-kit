@@ -26,6 +26,7 @@ from .evaluation import (
     set_coverage_report,
 )
 from .jackknife import JackknifePlusRegressor, jackknife_plus_interval
+from .outliers import ConformalOutlierDetector, benjamini_hochberg, conformal_p_values
 from .regression import SplitConformalRegressor, conformal_quantile
 from .risk_control import (
     MultilabelRiskController,
@@ -47,6 +48,7 @@ __all__ = [
     "AdaptiveConformalClassifier",
     "AdaptiveConformalRegressor",
     "AdaptiveConformalUpdater",
+    "ConformalOutlierDetector",
     "ConformalizedQuantileRegressor",
     "CrossConformalClassifier",
     "EnbPIRegressor",
@@ -62,6 +64,8 @@ __all__ = [
     "aci_update",
     "adaptive_conformal_quantile",
     "aps_scores",
+    "benjamini_hochberg",
+    "conformal_p_values",
     "conformal_quantile",
     "conformal_risk_threshold",
     "coverage_by_group",
