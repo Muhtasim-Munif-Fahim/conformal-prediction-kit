@@ -348,6 +348,33 @@ cal.interval_width(p_test[:, 1])                      # p1 - p0 per row
 VennAbersCalibrator().fit(p_cal, y_cal).predict_proba(p_test)  # multiclass, one-vs-rest
 ```
 
+## Conformal outlier detection with FDR control
+
+Any anomaly score (an isolation-forest score, an autoencoder's reconstruction
+error, a negative log-likelihood) becomes a valid p-value once it is compared
+with the scores of held-out inliers:
+`p(x) = (1 + #{s_i >= s(x)}) / (n + 1)`, where a larger score means more
+anomalous. If `x` is an inlier, then `P(p(x) <= t) <= t`.
+`ConformalOutlierDetector` provides two ways to use these p-values:
+
+- `method="marginal"` flags `p <= alpha`, so each inlier is wrongly flagged
+  with probability at most `alpha`.
+- `method="bh"` (the default) applies Benjamini–Hochberg across the test
+  batch. Conformal p-values that share one calibration set are PRDS, so the
+  **false discovery rate** stays at or below `alpha` (Bates et al., *Annals
+  of Statistics* 2023).
+
+`randomized=True` breaks ties at random, which makes the p-values exactly
+uniform for inliers. That helps when scores are discrete.
+
+```python
+from conformal_kit import ConformalOutlierDetector, conformal_p_values, benjamini_hochberg
+
+det = ConformalOutlierDetector(alpha=0.1, method="bh").fit(inlier_scores_cal)
+flags = det.predict(test_scores)                 # 1 = outlier
+report = det.decision_report(test_scores)        # p_values, q_values, flagged
+```
+
 ## Evaluating coverage
 
 Coverage is a claim to be checked, not assumed:
@@ -367,7 +394,10 @@ conformal-kit calibrate --calibration cal.csv --test test.csv --alpha 0.1
 conformal-kit classify --calibration cal.csv --test test.csv --alpha 0.1 --method raps
 conformal-kit evaluate --predictions intervals.csv --alpha 0.1
 conformal-kit weighted --calibration cal.csv --test test.csv --alpha 0.1
+conformal-kit outliers --calibration inlier_scores.csv --test scores.csv --alpha 0.1 --method bh --out flags.csv
 ```
+
+`outliers` reads a `score` column (change it with `--score-column`) and writes `p_value,q_value,outlier` for every test row.
 
 `calibrate` reads `y_true,y_pred` and writes regression intervals. `classify` reads `y_true,p0,p1,...` and writes a prediction set per row (`--method aps` or `--method raps`). `evaluate` scores an interval file. The two input layouts are not interchangeable.
 

@@ -14,6 +14,7 @@ from . import __version__
 from .aps import APSClassifier, RAPSClassifier
 from .enbpi import enbpi_interval
 from .evaluation import interval_coverage_report, set_coverage_report
+from .outliers import ConformalOutlierDetector
 from .regression import SplitConformalRegressor
 from .weighted import WeightedConformalRegressor
 
@@ -78,6 +79,43 @@ def _cmd_calibrate(args):
         print(f"Target coverage : {summary['target_coverage']:.1%}")
         print(f"Interval width  : {summary['interval_width']:.6g}")
         print(f"Intervals written for {summary['n_test']} test predictions")
+        if args.out:
+            print(f"Wrote {args.out}")
+    return 0
+
+
+def _cmd_outliers(args):
+    """Flag outliers in a test CSV of anomaly scores against inlier calibration scores."""
+    column = args.score_column
+    calibration = _read_columns(args.calibration, [column])
+    test = _read_columns(args.test, [column])
+    detector = ConformalOutlierDetector(
+        alpha=args.alpha,
+        method=args.method,
+        randomized=args.randomized,
+        random_state=args.seed,
+    ).fit(calibration[column])
+    report = detector.decision_report(test[column])
+
+    if args.out:
+        with open(args.out, "w", newline="", encoding="utf-8") as handle:
+            writer = csv.writer(handle)
+            writer.writerow([column, "p_value", "q_value", "outlier"])
+            writer.writerows(
+                zip(test[column], report["p_values"], report["q_values"], report["flagged"])
+            )
+
+    summary = {
+        key: report[key]
+        for key in ("method", "alpha", "n_calibration", "n_test", "n_flagged")
+    }
+    if args.json:
+        print(json.dumps(summary, indent=2))
+    else:
+        control = "FDR" if args.method == "bh" else "per-point false-alarm rate"
+        print(f"Calibrated on {summary['n_calibration']} inlier scores")
+        print(f"Method          : {args.method} ({control} <= {args.alpha:g})")
+        print(f"Flagged         : {summary['n_flagged']} of {summary['n_test']} test points")
         if args.out:
             print(f"Wrote {args.out}")
     return 0
@@ -432,6 +470,22 @@ def build_parser():
     weighted.add_argument("--out", default=None, help="Write intervals to this CSV")
     weighted.add_argument("--json", action="store_true", help="Emit JSON")
 
+    outliers = sub.add_parser(
+        "outliers",
+        help="Conformal outlier detection with BH false-discovery-rate control",
+    )
+    outliers.add_argument("--calibration", required=True, help="CSV of inlier anomaly scores")
+    outliers.add_argument("--test", required=True, help="CSV of test anomaly scores")
+    outliers.add_argument(
+        "--score-column", default="score", help="Anomaly-score column, larger = more anomalous"
+    )
+    outliers.add_argument("--alpha", type=float, default=0.1, help="Target FDR (bh) or false-alarm rate")
+    outliers.add_argument("--method", choices=["bh", "marginal"], default="bh")
+    outliers.add_argument("--randomized", action="store_true", help="Randomized tie-breaking p-values")
+    outliers.add_argument("--seed", type=int, default=None, help="Seed for --randomized")
+    outliers.add_argument("--out", default=None, help="Write p-values and flags to this CSV")
+    outliers.add_argument("--json", action="store_true", help="Emit JSON")
+
     evaluate = sub.add_parser(
         "evaluate", help="Report empirical coverage for a CSV of intervals"
     )
@@ -459,6 +513,7 @@ def main(argv=None):
         "classify": _cmd_classify,
         "enbpi": _cmd_enbpi,
         "evaluate": _cmd_evaluate,
+        "outliers": _cmd_outliers,
         "weighted": _cmd_weighted,
     }[args.command]
     try:
