@@ -36,6 +36,22 @@ conformal = SplitConformalRegressor(alpha=0.1, normalize=True).fit(
 lower, upper = conformal.predict_interval(test_pred, difficulty=test_sigma)
 ```
 
+## Mondrian split conformal (group-conditional regression)
+
+When coverage must hold *inside* each segment (region, device, time bucket),
+use Mondrian split conformal. Residuals are calibrated per group so a rare /
+hard group gets its own wider quantile instead of borrowing the easy groups'
+tight threshold:
+
+```python
+from conformal_kit import MondrianSplitConformalRegressor
+
+conformal = MondrianSplitConformalRegressor(alpha=0.1).fit(
+    y_calibration, calibration_pred, groups=calibration_region
+)
+lower, upper = conformal.predict_interval(test_pred, groups=test_region)
+```
+
 ## CQR: conformalized quantile regression
 
 When the model already predicts a lower and an upper quantile, conformalize those bounds instead of a point prediction. CQR (Romano, Patterson, Candès 2019) measures how far calibration labels fall outside the predicted quantile interval and expands both sides by a finite-sample quantile of that score. Marginal coverage is `1 - alpha`; the width still follows the quantile model, so intervals stay narrow where the noise is small.

@@ -27,7 +27,12 @@ from .evaluation import (
 )
 from .jackknife import JackknifePlusRegressor, jackknife_plus_interval
 from .outliers import ConformalOutlierDetector, benjamini_hochberg, conformal_p_values
-from .regression import SplitConformalRegressor, conformal_quantile
+from .regression import (
+    MondrianSplitConformalRegressor,
+    SplitConformalRegressor,
+    conformal_quantile,
+    mondrian_regression_quantiles,
+)
 from .risk_control import (
     MultilabelRiskController,
     conformal_risk_threshold,
@@ -54,6 +59,7 @@ __all__ = [
     "EnbPIRegressor",
     "JackknifePlusRegressor",
     "MondrianConformalClassifier",
+    "MondrianSplitConformalRegressor",
     "MultilabelRiskController",
     "RAPSClassifier",
     "SplitConformalClassifier",
@@ -80,6 +86,7 @@ __all__ = [
     "jackknife_plus_interval",
     "likelihood_ratio_from_probabilities",
     "mondrian_quantiles",
+    "mondrian_regression_quantiles",
     "raps_scores",
     "set_coverage_report",
     "venn_abers_probabilities",
