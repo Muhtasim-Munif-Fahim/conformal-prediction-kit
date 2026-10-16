@@ -15,6 +15,7 @@ from .aps import APSClassifier, RAPSClassifier
 from .enbpi import enbpi_interval
 from .evaluation import interval_coverage_report, set_coverage_report
 from .outliers import ConformalOutlierDetector
+from .predictive import SplitConformalPredictiveSystem, pit_uniformity_report
 from .regression import SplitConformalRegressor
 from .weighted import WeightedConformalRegressor
 
@@ -79,6 +80,75 @@ def _cmd_calibrate(args):
         print(f"Target coverage : {summary['target_coverage']:.1%}")
         print(f"Interval width  : {summary['interval_width']:.6g}")
         print(f"Intervals written for {summary['n_test']} test predictions")
+        if args.out:
+            print(f"Wrote {args.out}")
+    return 0
+
+
+def _parse_levels(raw):
+    try:
+        levels = [float(part) for part in raw.split(",") if part.strip()]
+    except ValueError:
+        raise ValueError(f"--quantiles must be comma-separated numbers, got {raw!r}") from None
+    if not levels:
+        raise ValueError("--quantiles must list at least one level")
+    return levels
+
+
+def _cmd_predictive(args):
+    """Conformal predictive distributions: quantiles, intervals, PIT and CRPS."""
+    calibration = _read_columns(args.calibration, ["y_true", "y_pred"])
+    test = _read_columns(args.test, ["y_pred"])
+    levels = _parse_levels(args.quantiles)
+    system = SplitConformalPredictiveSystem().fit(
+        calibration["y_true"], calibration["y_pred"]
+    )
+    quantiles = system.quantile(levels, test["y_pred"])
+    lower, upper = system.predict_interval(test["y_pred"], alpha=args.alpha)
+
+    summary = {
+        "alpha": args.alpha,
+        "n_calibration": system.n_calibration_,
+        "n_test": int(test["y_pred"].size),
+        "quantile_levels": levels,
+    }
+    try:
+        labelled = _read_columns(args.test, ["y_pred", "y_true"])
+    except ValueError:
+        labelled = None
+    if labelled is not None:
+        y_true = labelled["y_true"]
+        pit = system.pit(y_true, labelled["y_pred"], seed=args.seed)
+        report = pit_uniformity_report(pit)
+        covered = (y_true >= lower) & (y_true <= upper)
+        summary.update(
+            {
+                "mean_crps": float(np.mean(system.crps(y_true, labelled["y_pred"]))),
+                "pit_ks_statistic": report["ks_statistic"],
+                "pit_max_bin_deviation": report["max_bin_deviation"],
+                "interval_coverage": float(np.mean(covered)),
+            }
+        )
+
+    if args.out:
+        with open(args.out, "w", newline="", encoding="utf-8") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(
+                ["y_pred", "lower", "upper"] + [f"q{level:g}" for level in levels]
+            )
+            for row in zip(test["y_pred"], lower, upper, quantiles):
+                writer.writerow([row[0], row[1], row[2], *row[3]])
+
+    if args.json:
+        print(json.dumps(summary, indent=2))
+    else:
+        print(f"Conformal predictive system on {summary['n_calibration']} calibration points")
+        print(f"Quantile levels : {', '.join(f'{lv:g}' for lv in levels)}")
+        print(f"Central interval: {1 - args.alpha:.1%}")
+        if "mean_crps" in summary:
+            print(f"Mean CRPS       : {summary['mean_crps']:.6g}")
+            print(f"PIT KS distance : {summary['pit_ks_statistic']:.4f}")
+            print(f"Coverage        : {summary['interval_coverage']:.1%}")
         if args.out:
             print(f"Wrote {args.out}")
     return 0
@@ -470,6 +540,22 @@ def build_parser():
     weighted.add_argument("--out", default=None, help="Write intervals to this CSV")
     weighted.add_argument("--json", action="store_true", help="Emit JSON")
 
+    predictive = sub.add_parser(
+        "predictive",
+        help="Conformal predictive distributions: quantiles, PIT and CRPS",
+    )
+    predictive.add_argument("--calibration", required=True, help="CSV with y_true,y_pred")
+    predictive.add_argument(
+        "--test", required=True, help="CSV with y_pred (and optional y_true for PIT/CRPS)"
+    )
+    predictive.add_argument(
+        "--quantiles", default="0.05,0.25,0.5,0.75,0.95", help="Comma-separated levels"
+    )
+    predictive.add_argument("--alpha", type=float, default=0.1, help="1 - central interval coverage")
+    predictive.add_argument("--seed", type=int, default=None, help="Seed for randomized PIT")
+    predictive.add_argument("--out", default=None, help="Write quantiles to this CSV")
+    predictive.add_argument("--json", action="store_true", help="Emit JSON")
+
     outliers = sub.add_parser(
         "outliers",
         help="Conformal outlier detection with BH false-discovery-rate control",
@@ -514,6 +600,7 @@ def main(argv=None):
         "enbpi": _cmd_enbpi,
         "evaluate": _cmd_evaluate,
         "outliers": _cmd_outliers,
+        "predictive": _cmd_predictive,
         "weighted": _cmd_weighted,
     }[args.command]
     try:
