@@ -391,6 +391,30 @@ flags = det.predict(test_scores)                 # 1 = outlier
 report = det.decision_report(test_scores)        # p_values, q_values, flagged
 ```
 
+## Conformal predictive distributions (full predictive CDFs)
+
+`SplitConformalPredictiveSystem` turns signed calibration residuals into a
+full predictive distribution for every test point (Vovk et al., split
+conformal predictive systems). The randomized CDF
+`Q(y, tau) = (#{r_i < s} + tau * (#{r_i = s} + 1)) / (n + 1)` is *calibrated in
+probability*: under exchangeability `Q(y_test, tau)` is exactly uniform, so
+every quantile has the advertised frequency for any model.
+
+```python
+from conformal_kit import SplitConformalPredictiveSystem, pit_uniformity_report
+
+cps = SplitConformalPredictiveSystem().fit(y_cal, pred_cal)
+cps.quantile([0.1, 0.5, 0.9], pred_test)      # (n_test, 3), P(Y <= q_p) >= p
+cps.predict_interval(pred_test, alpha=0.1)    # central 90% interval
+cps.cdf(threshold, pred_test)                 # P(Y <= threshold) per point
+cps.crps(y_test, pred_test).mean()            # proper score for model comparison
+pit_uniformity_report(cps.pit(y_test, pred_test, seed=0))["ks_statistic"]
+```
+
+`normalize=True` with a per-point `difficulty` scales residuals for
+heteroskedastic data (lower CRPS, still calibrated). Upper quantiles beyond
+what the calibration set can resolve return `+inf`.
+
 ## Evaluating coverage
 
 Coverage is a claim to be checked, not assumed:
@@ -410,6 +434,7 @@ conformal-kit calibrate --calibration cal.csv --test test.csv --alpha 0.1
 conformal-kit classify --calibration cal.csv --test test.csv --alpha 0.1 --method raps
 conformal-kit evaluate --predictions intervals.csv --alpha 0.1
 conformal-kit weighted --calibration cal.csv --test test.csv --alpha 0.1
+conformal-kit predictive --calibration cal.csv --test test.csv --quantiles 0.1,0.5,0.9 --out q.csv
 conformal-kit outliers --calibration inlier_scores.csv --test scores.csv --alpha 0.1 --method bh --out flags.csv
 ```
 

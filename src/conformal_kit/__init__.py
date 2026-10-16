@@ -27,6 +27,11 @@ from .evaluation import (
 )
 from .jackknife import JackknifePlusRegressor, jackknife_plus_interval
 from .outliers import ConformalOutlierDetector, benjamini_hochberg, conformal_p_values
+from .predictive import (
+    SplitConformalPredictiveSystem,
+    crps_empirical,
+    pit_uniformity_report,
+)
 from .regression import (
     MondrianSplitConformalRegressor,
     SplitConformalRegressor,
@@ -63,6 +68,7 @@ __all__ = [
     "MultilabelRiskController",
     "RAPSClassifier",
     "SplitConformalClassifier",
+    "SplitConformalPredictiveSystem",
     "SplitConformalRegressor",
     "VennAbersCalibrator",
     "WeightedConformalRegressor",
@@ -78,6 +84,7 @@ __all__ = [
     "cqr_scores",
     "cross_conformal_p_values",
     "cross_conformal_sets",
+    "crps_empirical",
     "effective_sample_size",
     "enbpi_interval",
     "enbpi_quantile",
@@ -87,6 +94,7 @@ __all__ = [
     "likelihood_ratio_from_probabilities",
     "mondrian_quantiles",
     "mondrian_regression_quantiles",
+    "pit_uniformity_report",
     "raps_scores",
     "set_coverage_report",
     "venn_abers_probabilities",
