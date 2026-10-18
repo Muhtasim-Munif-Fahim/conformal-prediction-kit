@@ -13,6 +13,7 @@ import numpy as np
 from . import __version__
 from .aps import APSClassifier, RAPSClassifier
 from .enbpi import enbpi_interval
+from .full_conformal import FullConformalRidgeRegressor
 from .evaluation import interval_coverage_report, set_coverage_report
 from .outliers import ConformalOutlierDetector
 from .predictive import SplitConformalPredictiveSystem, pit_uniformity_report
@@ -149,6 +150,72 @@ def _cmd_predictive(args):
             print(f"Mean CRPS       : {summary['mean_crps']:.6g}")
             print(f"PIT KS distance : {summary['pit_ks_statistic']:.4f}")
             print(f"Coverage        : {summary['interval_coverage']:.1%}")
+        if args.out:
+            print(f"Wrote {args.out}")
+    return 0
+
+
+def _read_header(path):
+    try:
+        with open(path, newline="", encoding="utf-8") as handle:
+            return next(csv.reader(handle), [])
+    except OSError as exc:
+        raise ValueError(f"could not read {path}: {exc}") from None
+
+
+def _cmd_full_ridge(args):
+    """Exact full-conformal ridge intervals (RRCM) from raw features."""
+    header = _read_header(args.train)
+    if args.features:
+        features = [name.strip() for name in args.features.split(",") if name.strip()]
+    else:
+        features = [name for name in header if name not in ("y_true", "y_pred")]
+    if not features:
+        raise ValueError("no feature columns; pass --features")
+    train = _read_columns(args.train, features + ["y_true"])
+    test = _read_columns(args.test, features)
+    X_train = np.column_stack([train[name] for name in features])
+    X_test = np.column_stack([test[name] for name in features])
+    model = FullConformalRidgeRegressor(
+        alpha=args.alpha, ridge=args.ridge, fit_intercept=not args.no_intercept
+    ).fit(X_train, train["y_true"])
+    lower, upper = model.predict_interval(X_test)
+    y_pred = model.predict(X_test)
+    finite = np.isfinite(lower) & np.isfinite(upper)
+    summary = {
+        "alpha": args.alpha,
+        "ridge": args.ridge,
+        "features": features,
+        "n_train": int(X_train.shape[0]),
+        "n_test": int(X_test.shape[0]),
+        "mean_width": float(np.mean(upper[finite] - lower[finite])) if finite.any() else None,
+        "n_unbounded": int((~finite).sum()),
+    }
+    try:
+        labelled = _read_columns(args.test, ["y_true"])
+    except ValueError:
+        labelled = None
+    if labelled is not None:
+        y_true = labelled["y_true"]
+        summary["coverage"] = float(np.mean((y_true >= lower) & (y_true <= upper)))
+    if args.out:
+        with open(args.out, "w", newline="", encoding="utf-8") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["y_pred", "lower", "upper"])
+            for row in zip(y_pred, lower, upper):
+                writer.writerow(row)
+    if args.json:
+        print(json.dumps(summary, indent=2))
+    else:
+        print(
+            f"Full conformal ridge (RRCM) on {summary['n_train']} training points, "
+            f"{len(features)} feature(s), ridge={args.ridge:g}"
+        )
+        print(f"Target coverage : {1 - args.alpha:.1%}")
+        if summary["mean_width"] is not None:
+            print(f"Mean width      : {summary['mean_width']:.6g}")
+        if "coverage" in summary:
+            print(f"Coverage        : {summary['coverage']:.1%}")
         if args.out:
             print(f"Wrote {args.out}")
     return 0
@@ -556,6 +623,21 @@ def build_parser():
     predictive.add_argument("--out", default=None, help="Write quantiles to this CSV")
     predictive.add_argument("--json", action="store_true", help="Emit JSON")
 
+    full_ridge = sub.add_parser(
+        "full-ridge",
+        help="Exact full conformal intervals for ridge regression (no calibration split)",
+    )
+    full_ridge.add_argument("--train", required=True, help="CSV with feature columns and y_true")
+    full_ridge.add_argument("--test", required=True, help="CSV with the same features (optional y_true)")
+    full_ridge.add_argument(
+        "--features", default=None, help="Comma-separated feature columns (default: all but y_true/y_pred)"
+    )
+    full_ridge.add_argument("--ridge", type=float, default=1.0, help="L2 penalty (default 1.0)")
+    full_ridge.add_argument("--no-intercept", action="store_true", help="Do not fit an intercept")
+    full_ridge.add_argument("--alpha", type=float, default=0.1, help="1 - target coverage")
+    full_ridge.add_argument("--out", default=None, help="Write y_pred,lower,upper to this CSV")
+    full_ridge.add_argument("--json", action="store_true", help="Emit JSON")
+
     outliers = sub.add_parser(
         "outliers",
         help="Conformal outlier detection with BH false-discovery-rate control",
@@ -599,6 +681,7 @@ def main(argv=None):
         "classify": _cmd_classify,
         "enbpi": _cmd_enbpi,
         "evaluate": _cmd_evaluate,
+        "full-ridge": _cmd_full_ridge,
         "outliers": _cmd_outliers,
         "predictive": _cmd_predictive,
         "weighted": _cmd_weighted,

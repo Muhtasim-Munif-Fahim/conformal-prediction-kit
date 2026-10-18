@@ -98,6 +98,27 @@ conformal = JackknifePlusRegressor(alpha=0.1, n_splits=10).fit(X, y, mean_traine
 
 The finite-sample guarantee for jackknife+ / CV+ is `1 - 2 * alpha`, not `1 - alpha`. In practice the intervals usually land close to the split-conformal target; the extra `alpha` is the price of not holding data out. Split conformal is the right default whenever a calibration split is affordable.
 
+## Full conformal ridge regression (exact, no calibration split)
+
+Jackknife+ pays for not holding data out with a `1 - 2 * alpha` guarantee. *Full* conformal prediction keeps the full `1 - alpha` guarantee and still uses every point for training, at the cost of refitting the model for every candidate label. For ridge regression that refit is linear in the candidate label `z`, so the exact prediction set can be computed in closed form: the Ridge Regression Confidence Machine (Nouretdinov, Melluish & Vovk, ICML 2001; Vovk, Gammerman & Shafer, 2005). Each training point's residual `a_i + b_i z` is compared with the test point's, the roots of `|a_i + b_i z| = |a_t + b_t z|` are swept in order, and the set `{z : p(z) > alpha}` is returned exactly, with no grid. A Sherman-Morrison update keeps each test point at `O(n p)`.
+
+```python
+from conformal_kit import FullConformalRidgeRegressor
+
+model = FullConformalRidgeRegressor(alpha=0.1, ridge=1.0).fit(X_train, y_train)
+lower, upper = model.predict_interval(X_test)   # convex hull of each exact set
+sets = model.predict_set(X_test)                 # list of (low, high) pieces per row
+model.p_value(X_test[0], [0.0, 1.5])             # full-conformal p-values of candidate labels
+```
+
+From the CLI, with raw feature columns plus `y_true`:
+
+```bash
+conformal-kit full-ridge --train train.csv --test test.csv --ridge 1.0 --alpha 0.1 --out intervals.csv
+```
+
+Use it when the model is (or can be) a ridge regression on a small or medium sample and no calibration split can be spared. If `(n + 1) * alpha < 1` every label is kept and the interval is unbounded, as the guarantee requires.
+
 ## Classification: prediction sets
 
 ```python
