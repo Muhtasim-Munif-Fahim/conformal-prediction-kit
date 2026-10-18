@@ -25,6 +25,7 @@ from .evaluation import (
     interval_coverage_report,
     set_coverage_report,
 )
+from .full_conformal import FullConformalRidgeRegressor, ridge_conformal_set
 from .jackknife import JackknifePlusRegressor, jackknife_plus_interval
 from .outliers import ConformalOutlierDetector, benjamini_hochberg, conformal_p_values
 from .predictive import (
@@ -62,6 +63,7 @@ __all__ = [
     "ConformalizedQuantileRegressor",
     "CrossConformalClassifier",
     "EnbPIRegressor",
+    "FullConformalRidgeRegressor",
     "JackknifePlusRegressor",
     "MondrianConformalClassifier",
     "MondrianSplitConformalRegressor",
@@ -78,6 +80,7 @@ __all__ = [
     "aps_scores",
     "benjamini_hochberg",
     "conformal_p_values",
+    "ridge_conformal_set",
     "conformal_quantile",
     "conformal_risk_threshold",
     "coverage_by_group",
