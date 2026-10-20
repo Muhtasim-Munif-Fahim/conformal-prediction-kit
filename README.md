@@ -327,6 +327,30 @@ ctrl.threshold_                            # probability cut-off 1 - lambda_hat
 For any other monotone loss, build a `(n, m)` loss matrix over increasing
 candidate `lambdas` and call `conformal_risk_threshold(losses, lambdas, alpha)`.
 
+## Learn then Test: risk control with high probability
+
+Conformal risk control bounds the *expected* loss. Averaged over calibration sets that is exact, but roughly half of all calibration draws still give a threshold whose true risk is above `alpha`. Learn then Test (Angelopoulos, Bates, Candès, Jordan & Lei, 2021) gives the stronger **(alpha, delta)** guarantee `P(R(lambda_hat) <= alpha) >= 1 - delta`. Each candidate `lambda` is a hypothesis test of `R(lambda) > alpha`, scored with a concentration-inequality p-value, and a family-wise error procedure keeps the `lambda` values whose null is rejected. The loss does **not** have to be monotone in `lambda`.
+
+```python
+from conformal_kit import LTTMultilabelController, learn_then_test
+
+# Multilabel sets with FNR <= 10% for at least 90% of calibration draws
+ctrl = LTTMultilabelController(alpha=0.1, delta=0.1).fit(y_cal, probs_cal)
+sets = ctrl.predict_set(probs_test)   # labels with p >= 1 - ctrl.lambda_
+
+# Any loss matrix: losses[i, j] = loss of calibration point i at lambdas[j]
+res = learn_then_test(losses, lambdas, alpha=0.1, delta=0.1,
+                      p_value="hb",            # hb | hoeffding | bentkus | binomial (0/1 losses)
+                      method="fixed_sequence") # fixed_sequence | bonferroni | holm
+res.lambda_hat, res.valid, res.p_values
+```
+
+- `hoeffding_p_value`, `bentkus_p_value`, `hoeffding_bentkus_p_value` (the minimum of the two, the default) and the exact `binomial_p_value` for 0/1 losses.
+- `fwer_reject(p, delta, method, order)` implements Bonferroni, Holm and fixed-sequence testing. With a monotone loss, fixed sequence from the safest `lambda` down gives RCPS-style control with no multiplicity penalty. For a non-monotone loss, Bonferroni or Holm certifies only the safe region.
+- `learn_then_test` returns an `LTTResult` with the empirical risks, p-values, certified mask and `lambda_hat`, or `None` if nothing passes.
+
+CLI: `conformal-kit ltt --losses losses.csv --alpha 0.1 --delta 0.1`. The header row holds the `lambda` values and each row is one calibration point. The command prints the certified `lambda`, the CRC threshold for comparison, and optionally a per-`lambda` CSV.
+
 ## Ensemble Batch Prediction Intervals (EnbPI)
 
 Time series break the exchangeability assumption that split conformal, CQR and
@@ -457,6 +481,7 @@ conformal-kit evaluate --predictions intervals.csv --alpha 0.1
 conformal-kit weighted --calibration cal.csv --test test.csv --alpha 0.1
 conformal-kit predictive --calibration cal.csv --test test.csv --quantiles 0.1,0.5,0.9 --out q.csv
 conformal-kit outliers --calibration inlier_scores.csv --test scores.csv --alpha 0.1 --method bh --out flags.csv
+conformal-kit ltt --losses losses.csv --alpha 0.1 --delta 0.1 --method fixed_sequence --out ltt.csv
 ```
 
 `outliers` reads a `score` column (change it with `--score-column`) and writes `p_value,q_value,outlier` for every test row.

@@ -27,6 +27,17 @@ from .evaluation import (
 )
 from .full_conformal import FullConformalRidgeRegressor, ridge_conformal_set
 from .jackknife import JackknifePlusRegressor, jackknife_plus_interval
+from .ltt import (
+    LTTMultilabelController,
+    LTTResult,
+    bentkus_p_value,
+    binomial_p_value,
+    fwer_reject,
+    hoeffding_bentkus_p_value,
+    hoeffding_p_value,
+    learn_then_test,
+    ltt_p_values,
+)
 from .outliers import ConformalOutlierDetector, benjamini_hochberg, conformal_p_values
 from .predictive import (
     SplitConformalPredictiveSystem,
@@ -65,6 +76,8 @@ __all__ = [
     "EnbPIRegressor",
     "FullConformalRidgeRegressor",
     "JackknifePlusRegressor",
+    "LTTMultilabelController",
+    "LTTResult",
     "MondrianConformalClassifier",
     "MondrianSplitConformalRegressor",
     "MultilabelRiskController",
@@ -79,6 +92,8 @@ __all__ = [
     "adaptive_conformal_quantile",
     "aps_scores",
     "benjamini_hochberg",
+    "bentkus_p_value",
+    "binomial_p_value",
     "conformal_p_values",
     "ridge_conformal_set",
     "conformal_quantile",
@@ -92,9 +107,14 @@ __all__ = [
     "enbpi_interval",
     "enbpi_quantile",
     "false_negative_rate",
+    "fwer_reject",
+    "hoeffding_bentkus_p_value",
+    "hoeffding_p_value",
     "interval_coverage_report",
     "jackknife_plus_interval",
+    "learn_then_test",
     "likelihood_ratio_from_probabilities",
+    "ltt_p_values",
     "mondrian_quantiles",
     "mondrian_regression_quantiles",
     "pit_uniformity_report",
