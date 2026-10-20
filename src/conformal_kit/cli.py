@@ -15,9 +15,11 @@ from .aps import APSClassifier, RAPSClassifier
 from .enbpi import enbpi_interval
 from .full_conformal import FullConformalRidgeRegressor
 from .evaluation import interval_coverage_report, set_coverage_report
+from .ltt import learn_then_test
 from .outliers import ConformalOutlierDetector
 from .predictive import SplitConformalPredictiveSystem, pit_uniformity_report
 from .regression import SplitConformalRegressor
+from .risk_control import conformal_risk_threshold
 from .weighted import WeightedConformalRegressor
 
 __all__ = ["build_parser", "main"]
@@ -513,6 +515,74 @@ def _cmd_enbpi(args):
     return 0
 
 
+def _read_loss_matrix(path):
+    """Read a loss CSV whose header row holds the numeric lambda values."""
+    try:
+        with open(path, newline="", encoding="utf-8") as handle:
+            rows = list(csv.reader(handle))
+    except OSError as exc:
+        raise ValueError(f"could not read {path}: {exc}") from None
+    if len(rows) < 2:
+        raise ValueError(f"{path} needs a header of lambda values and at least one row")
+    try:
+        lambdas = np.asarray([float(v) for v in rows[0]], dtype=float)
+    except ValueError:
+        raise ValueError(f"{path}: header must contain numeric lambda values") from None
+    matrix = []
+    for line, row in enumerate(rows[1:], start=2):
+        if not row:
+            continue
+        if len(row) != lambdas.size:
+            raise ValueError(f"{path} line {line}: expected {lambdas.size} losses, got {len(row)}")
+        try:
+            matrix.append([float(v) for v in row])
+        except ValueError:
+            raise ValueError(f"{path} line {line}: losses must be numbers") from None
+    return lambdas, np.asarray(matrix, dtype=float)
+
+
+def _cmd_ltt(args):
+    """Learn then Test on a loss matrix: certified lambdas at (alpha, delta)."""
+    lambdas, losses = _read_loss_matrix(args.losses)
+    result = learn_then_test(
+        losses,
+        lambdas,
+        args.alpha,
+        args.delta,
+        p_value=args.p_value,
+        method=args.method,
+        loss_bound=args.loss_bound,
+        select=args.select,
+    )
+    summary = result.to_dict()
+    try:
+        summary["crc_lambda"] = conformal_risk_threshold(
+            losses[:, np.argsort(lambdas)], np.sort(lambdas), args.alpha, args.loss_bound
+        )
+    except ValueError:
+        summary["crc_lambda"] = None
+    if args.out:
+        with open(args.out, "w", newline="", encoding="utf-8") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["lambda", "risk_hat", "p_value", "valid"])
+            for row in zip(result.lambdas, result.risk_hat, result.p_values, result.valid):
+                writer.writerow([row[0], row[1], row[2], int(row[3])])
+    if args.json:
+        print(json.dumps(summary, indent=2))
+    else:
+        print(
+            f"Learn then Test on {result.n_calibration} rows, {result.lambdas.size} candidates "
+            f"({args.p_value} p-values, {args.method})"
+        )
+        print(f"Guarantee       : P(risk <= {args.alpha}) >= {1 - args.delta:.0%}")
+        print(f"Certified       : {result.n_valid} of {result.lambdas.size}")
+        print(f"lambda_hat      : {result.lambda_hat}")
+        print(f"CRC lambda (E[risk] <= alpha only): {summary['crc_lambda']}")
+        if args.out:
+            print(f"Wrote {args.out}")
+    return 0 if result.lambda_hat is not None else 1
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="conformal-kit",
@@ -654,6 +724,28 @@ def build_parser():
     outliers.add_argument("--out", default=None, help="Write p-values and flags to this CSV")
     outliers.add_argument("--json", action="store_true", help="Emit JSON")
 
+    ltt = sub.add_parser(
+        "ltt",
+        help="Learn then Test: lambdas with P(risk <= alpha) >= 1 - delta",
+    )
+    ltt.add_argument(
+        "--losses",
+        required=True,
+        help="CSV whose header lists lambda values; one row of losses per calibration point",
+    )
+    ltt.add_argument("--alpha", type=float, default=0.1, help="Risk level to certify")
+    ltt.add_argument("--delta", type=float, default=0.1, help="Allowed failure probability")
+    ltt.add_argument(
+        "--p-value", choices=["hb", "hoeffding", "bentkus", "binomial"], default="hb"
+    )
+    ltt.add_argument(
+        "--method", choices=["fixed_sequence", "bonferroni", "holm"], default="fixed_sequence"
+    )
+    ltt.add_argument("--loss-bound", type=float, default=1.0, help="Upper bound on any loss")
+    ltt.add_argument("--select", choices=["min", "max"], default="min")
+    ltt.add_argument("--out", default=None, help="Write lambda,risk_hat,p_value,valid CSV")
+    ltt.add_argument("--json", action="store_true", help="Emit JSON")
+
     evaluate = sub.add_parser(
         "evaluate", help="Report empirical coverage for a CSV of intervals"
     )
@@ -682,6 +774,7 @@ def main(argv=None):
         "enbpi": _cmd_enbpi,
         "evaluate": _cmd_evaluate,
         "full-ridge": _cmd_full_ridge,
+        "ltt": _cmd_ltt,
         "outliers": _cmd_outliers,
         "predictive": _cmd_predictive,
         "weighted": _cmd_weighted,
