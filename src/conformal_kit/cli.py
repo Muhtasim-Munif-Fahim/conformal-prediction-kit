@@ -371,8 +371,16 @@ def _cmd_classify(args):
         raise ValueError(f"{args.calibration} is missing column(s): y_true")
     test_labels, test_probabilities = _read_class_csv(args.test)
 
+    if args.method != "clustered" and args.n_clusters is not None:
+        raise ValueError("--n-clusters applies only to --method clustered")
     if args.method == "aps":
         model = APSClassifier(alpha=args.alpha).fit(cal_labels, cal_probabilities)
+    elif args.method == "clustered":
+        from .clustered import ClusteredConformalClassifier
+
+        model = ClusteredConformalClassifier(
+            alpha=args.alpha, method="aps", n_clusters=args.n_clusters, seed=args.seed
+        ).fit(cal_labels, cal_probabilities)
     else:
         penalty = 0.01 if args.penalty is None else args.penalty
         k_reg = 1 if args.k_reg is None else args.k_reg
@@ -408,6 +416,10 @@ def _cmd_classify(args):
     if args.method == "raps":
         summary["penalty"] = model.penalty
         summary["k_reg"] = model.k_reg
+    if args.method == "clustered":
+        summary["n_clusters"] = model.n_clusters_
+        summary["n_null_classes"] = int((model.class_to_cluster_ < 0).sum())
+        summary["cluster_quantiles"] = [float(q) for q in model.cluster_quantiles_]
 
     report = None
     if test_labels is not None:
@@ -416,6 +428,10 @@ def _cmd_classify(args):
         summary["within_tolerance"] = report["within_tolerance"]
         summary["median_set_size"] = report["median_set_size"]
         summary["singleton_rate"] = report["singleton_rate"]
+        if args.method == "clustered":
+            from .clustered import class_coverage_gap
+
+            summary["class_coverage_gap"] = class_coverage_gap(test_labels, mask, args.alpha)["cov_gap"]
 
     if args.json:
         print(json.dumps(summary, indent=2))
@@ -427,6 +443,11 @@ def _cmd_classify(args):
         print(f"Target coverage : {summary['target_coverage']:.1%}")
         print(f"Quantile        : {summary['quantile']:.6g}")
         print(f"Mean set size   : {summary['mean_set_size']:.6g}")
+        if args.method == "clustered":
+            print(f"Clusters        : {summary['n_clusters']} "
+                  f"(+ null cluster with {summary['n_null_classes']} classes)")
+            if "class_coverage_gap" in summary:
+                print(f"Class cov. gap  : {summary['class_coverage_gap']:.3%}")
         if report is not None:
             print(f"Coverage        : {report['coverage']:.3%}")
             verdict = "meets target" if report["within_tolerance"] else "BELOW TARGET"
@@ -619,9 +640,10 @@ def build_parser():
     )
     classify.add_argument(
         "--method",
-        choices=("aps", "raps"),
+        choices=("aps", "raps", "clustered"),
         default="aps",
-        help="aps is cumulative probability; raps adds a rank penalty",
+        help="aps is cumulative probability; raps adds a rank penalty; clustered pools "
+        "similar classes into cluster-wise APS thresholds (Ding et al. 2023)",
     )
     classify.add_argument("--alpha", type=float, default=0.1, help="1 - target coverage")
     classify.add_argument(
@@ -636,6 +658,13 @@ def build_parser():
         default=None,
         help="RAPS leaves the first k ranks unpenalized (default 1)",
     )
+    classify.add_argument(
+        "--n-clusters",
+        type=int,
+        default=None,
+        help="clusters for --method clustered (default: Ding et al. heuristic)",
+    )
+    classify.add_argument("--seed", type=int, default=0, help="seed for --method clustered")
     classify.add_argument("--out", default=None, help="Write prediction sets to this CSV")
     classify.add_argument("--json", action="store_true", help="Emit JSON")
 

@@ -191,6 +191,37 @@ The cost is data. Every class needs enough calibration examples to support the f
 
 Use split conformal when you only need average coverage. Use Mondrian when a missed class is as bad as a missed point — a rare diagnosis, a safety label, any setting where the class you fail on is the one that matters. Check it with `set_coverage_report(..., groups=y_test)`.
 
+## Clustered conformal: class-conditional coverage with few examples per class
+
+Mondrian needs `ceil(1/alpha) - 1` calibration points *per class*. With many classes and only a few examples of each, its thresholds become noisy or impossible. Split conformal pools every class together. **Clustered conformal prediction** (Ding, Fannjiang, Jordan & Tibshirani, NeurIPS 2023) sits between the two:
+
+1. Part of the calibration data is used to embed each class as the quantiles of its scores.
+2. Classes are grouped with weighted k-means.
+3. Each cluster gets its own conformal threshold. Rare classes fall back to the marginal threshold.
+
+```python
+from conformal_kit import ClusteredConformalClassifier, class_coverage_gap
+
+cc = ClusteredConformalClassifier(alpha=0.1, method="lac", seed=0).fit(y_cal, p_cal)
+sets = cc.predict_set(p_test)
+cc.n_clusters_, cc.class_to_cluster_, cc.cluster_quantiles_
+class_coverage_gap(y_test, sets, alpha=0.1)["cov_gap"]   # mean |coverage_k - 0.9|
+```
+
+`n_clusters` and `frac_clustering` default to the paper's heuristic (`clustering_parameters`). Coverage is exact within each cluster, so it also holds marginally.
+
+On a synthetic 100-class problem with two kinds of class difficulty and 20 calibration points per class:
+
+| Method | CovGap | Mean set size |
+| --- | --- | --- |
+| Split | 12.8% | 29.9 |
+| Mondrian | 6.1% | 27.9 |
+| Clustered | 5.1% | 24.5 |
+
+With 50 points per class the CovGaps were 10.9% (split), 3.9% (Mondrian) and 2.5% (clustered).
+
+The CLI exposes it as `conformal-kit classify --method clustered` (APS scores).
+
 ## Cross-conformal and CV+: classification sets without a calibration split
 
 Split APS and LAC already cover the inductive case, where a fitted model and a held-out probability matrix are enough. Cross-conformal prediction (Vovk 2015) is the route that does not hold data out. Each training point is scored by a model that never saw it, and a candidate label is kept when its p-value clears `alpha`. `n_splits=None` is leave-one-out; `n_splits=K` is K-fold CV+, the same split of labour as jackknife+ versus CV+ for regression.

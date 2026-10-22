@@ -13,6 +13,12 @@ from .classification import (
     SplitConformalClassifier,
     mondrian_quantiles,
 )
+from .clustered import (
+    ClusteredConformalClassifier,
+    class_coverage_gap,
+    clustering_parameters,
+    weighted_kmeans,
+)
 from .cqr import ConformalizedQuantileRegressor, cqr_scores
 from .cross_conformal import (
     CrossConformalClassifier,
@@ -66,6 +72,10 @@ from .weighted import (
 __version__ = "0.1.0"
 
 __all__ = [
+    "ClusteredConformalClassifier",
+    "class_coverage_gap",
+    "clustering_parameters",
+    "weighted_kmeans",
     "APSClassifier",
     "AdaptiveConformalClassifier",
     "AdaptiveConformalRegressor",
