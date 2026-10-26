@@ -467,6 +467,35 @@ flags = det.predict(test_scores)                 # 1 = outlier
 report = det.decision_report(test_scores)        # p_values, q_values, flagged
 ```
 
+## Conformal selection: pick candidates with y > c at a target FDR
+
+Screening problems (drug candidates, job applicants, loans) ask a different
+question from prediction intervals: *which test units have an outcome above a
+threshold `c`?* `conformal_selection` (Jin & Candès, "Selection by Prediction
+with Conformal p-values", JMLR 2023) turns any regression model into a
+selection rule whose **false discovery rate** — the share of selected units
+that actually have `y <= c` — stays at or below `q`, in finite samples and
+without assumptions on the model.
+
+Each test unit gets the p-value
+`p_j = (#{V_i < V(X_j, c)} + 1 + #{V_i = V(X_j, c)}) / (n + 1)` and BH is
+applied at level `q`. The default `score="clipped"`
+(`V(x, y) = M * 1{y > c} + c - mu(x)`) removes calibration units that are
+already above `c` from the comparison, which is much more powerful than the
+plain residual score `y - mu(x)` (`score="residual"`).
+
+```python
+from conformal_kit import ConformalSelector, conformal_selection, selection_report
+
+selected, p_values, q_values = conformal_selection(y_cal, pred_cal, pred_test, threshold=1.0, q=0.1)
+selection_report(selected, y_test, threshold=1.0)   # realised FDP and power, when labels exist
+
+sel = ConformalSelector(threshold=1.0, q=0.1).fit(y_cal, pred_cal)
+sel.decision_report(pred_test)                      # p_values, q_values, selected
+```
+
+Thresholds may also be per-unit (`threshold=c_cal, test_threshold=c_test`).
+
 ## Conformal predictive distributions (full predictive CDFs)
 
 `SplitConformalPredictiveSystem` turns signed calibration residuals into a
@@ -514,6 +543,10 @@ conformal-kit predictive --calibration cal.csv --test test.csv --quantiles 0.1,0
 conformal-kit outliers --calibration inlier_scores.csv --test scores.csv --alpha 0.1 --method bh --out flags.csv
 conformal-kit ltt --losses losses.csv --alpha 0.1 --delta 0.1 --method fixed_sequence --out ltt.csv
 ```
+
+`select` reads `y_true,y_pred` calibration rows and `y_pred` test rows and selects rows with `y > --threshold` at FDR `--alpha`
+(`conformal-kit select --calibration cal.csv --test test.csv --threshold 1.0 --alpha 0.1 --out selected.csv`;
+add `--test-labels` to report the realised FDP and power when the test CSV also has `y_true`).
 
 `outliers` reads a `score` column (change it with `--score-column`) and writes `p_value,q_value,outlier` for every test row.
 
