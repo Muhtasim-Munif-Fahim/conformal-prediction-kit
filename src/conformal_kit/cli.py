@@ -19,6 +19,7 @@ from .ltt import learn_then_test
 from .outliers import ConformalOutlierDetector
 from .predictive import SplitConformalPredictiveSystem, pit_uniformity_report
 from .regression import SplitConformalRegressor
+from .selection import ConformalSelector, selection_report
 from .risk_control import conformal_risk_threshold
 from .weighted import WeightedConformalRegressor
 
@@ -255,6 +256,47 @@ def _cmd_outliers(args):
         print(f"Calibrated on {summary['n_calibration']} inlier scores")
         print(f"Method          : {args.method} ({control} <= {args.alpha:g})")
         print(f"Flagged         : {summary['n_flagged']} of {summary['n_test']} test points")
+        if args.out:
+            print(f"Wrote {args.out}")
+    return 0
+
+
+def _cmd_select(args):
+    """Conformal selection of test rows whose outcome exceeds --threshold (FDR control)."""
+    calibration = _read_columns(args.calibration, ["y_true", "y_pred"])
+    test = _read_columns(args.test, ["y_pred"])
+    selector = ConformalSelector(
+        threshold=args.threshold,
+        q=args.alpha,
+        score=args.score,
+        randomized=args.randomized,
+        random_state=args.seed,
+    ).fit(calibration["y_true"], calibration["y_pred"])
+    report = selector.decision_report(test["y_pred"])
+
+    if args.out:
+        with open(args.out, "w", newline="", encoding="utf-8") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["y_pred", "p_value", "q_value", "selected"])
+            writer.writerows(
+                zip(test["y_pred"], report["p_values"], report["q_values"], report["selected"].astype(int))
+            )
+
+    summary = {
+        key: report[key] for key in ("score", "q", "n_calibration", "n_test", "n_selected")
+    }
+    summary["threshold"] = args.threshold
+    if args.test_labels:
+        truth = _read_columns(args.test, ["y_true"])["y_true"]
+        summary.update(selection_report(report["selected"], truth, args.threshold))
+    if args.json:
+        print(json.dumps(summary, indent=2))
+    else:
+        print(f"Calibrated on {summary['n_calibration']} labelled rows (score={args.score})")
+        print(f"Target          : select y > {args.threshold:g} with FDR <= {args.alpha:g}")
+        print(f"Selected        : {summary['n_selected']} of {summary['n_test']} test rows")
+        if args.test_labels:
+            print(f"Realised FDP    : {summary['fdp']:.3f}   power: {summary['power']:.3f}")
         if args.out:
             print(f"Wrote {args.out}")
     return 0
@@ -753,6 +795,23 @@ def build_parser():
     outliers.add_argument("--out", default=None, help="Write p-values and flags to this CSV")
     outliers.add_argument("--json", action="store_true", help="Emit JSON")
 
+    select = sub.add_parser(
+        "select",
+        help="Conformal selection: pick test rows with y > threshold at FDR level --alpha",
+    )
+    select.add_argument("--calibration", required=True, help="CSV with y_true,y_pred")
+    select.add_argument("--test", required=True, help="CSV with y_pred (and y_true for --test-labels)")
+    select.add_argument("--threshold", type=float, required=True, help="Select rows with y > threshold")
+    select.add_argument("--alpha", type=float, default=0.1, help="Target false discovery rate q")
+    select.add_argument("--score", choices=["clipped", "residual"], default="clipped")
+    select.add_argument("--randomized", action="store_true", help="Randomized tie-breaking p-values")
+    select.add_argument("--seed", type=int, default=None, help="Seed for --randomized")
+    select.add_argument(
+        "--test-labels", action="store_true", help="Test CSV has y_true: report realised FDP/power"
+    )
+    select.add_argument("--out", default=None, help="Write y_pred,p_value,q_value,selected CSV")
+    select.add_argument("--json", action="store_true", help="Emit JSON")
+
     ltt = sub.add_parser(
         "ltt",
         help="Learn then Test: lambdas with P(risk <= alpha) >= 1 - delta",
@@ -806,6 +865,7 @@ def main(argv=None):
         "ltt": _cmd_ltt,
         "outliers": _cmd_outliers,
         "predictive": _cmd_predictive,
+        "select": _cmd_select,
         "weighted": _cmd_weighted,
     }[args.command]
     try:

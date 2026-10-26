@@ -50,6 +50,12 @@ from .predictive import (
     crps_empirical,
     pit_uniformity_report,
 )
+from .selection import (
+    ConformalSelector,
+    conformal_selection,
+    selection_p_values,
+    selection_report,
+)
 from .regression import (
     MondrianSplitConformalRegressor,
     SplitConformalRegressor,
@@ -72,6 +78,10 @@ from .weighted import (
 __version__ = "0.1.0"
 
 __all__ = [
+    "ConformalSelector",
+    "conformal_selection",
+    "selection_p_values",
+    "selection_report",
     "ClusteredConformalClassifier",
     "class_coverage_gap",
     "clustering_parameters",
