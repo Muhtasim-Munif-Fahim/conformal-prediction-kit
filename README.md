@@ -291,6 +291,34 @@ The same updater wraps classification scores (`lac` or `aps`) as `AdaptiveConfor
 
 ACI restores *long-run* coverage along the stream. It does not restore a finite-sample exchangeability guarantee on any one window, and it does not give class-conditional coverage. Right after a sudden shift the next few sets can miss while `alpha_t` catches up.
 
+## Conformal PID control: streaming intervals for time series
+
+`conformal_pid` and `ConformalPIDRegressor` implement conformal PID control
+(Angelopoulos, Candès & Tibshirani, NeurIPS 2023). ACI adjusts the
+miscoverage *level*. PID control instead steers the score *threshold* `q_t`
+directly, using three terms:
+
+* **P (quantile tracking)**: `q <- q + lr * (err_t - alpha)`. On *any*
+  bounded score stream, long-run miscoverage is within
+  `(B + lr) / (lr * T)` of `alpha`.
+* **I (error integration)**: `K_I * tan(sum(err - alpha) * log t / (t * C_sat))`.
+  It reacts quickly to a run of misses.
+* **D (scorecasting)**: an optional forecast of the next score, e.g.
+  `ewma_scorecaster(halflife)`, so that trend and seasonality are anticipated.
+
+```python
+from conformal_kit import ConformalPIDRegressor, conformal_pid, ewma_scorecaster
+
+res = conformal_pid(abs_residuals, alpha=0.1, lr=0.1, k_i=1.0,
+                    scorecaster=ewma_scorecaster(20))
+res.miscoverage, res.rolling_miscoverage(100)
+
+model = ConformalPIDRegressor(alpha=0.1, lr=0.05).fit(y_cal, pred_cal)
+lower, upper = model.predict_update(pred_stream, y_stream)  # issued before each label
+```
+
+On the CLI, run `conformal-kit pid --stream stream.csv --lr 0.1 --k-i 1 --ewma-halflife 20 --warmup 100 --out pid.csv`.
+
 ## Weighted conformal: coverage under covariate shift
 
 Split conformal assumes calibration and test data are exchangeable. Under
