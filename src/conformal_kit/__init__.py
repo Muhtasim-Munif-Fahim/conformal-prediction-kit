@@ -45,6 +45,15 @@ from .ltt import (
     ltt_p_values,
 )
 from .outliers import ConformalOutlierDetector, benjamini_hochberg, conformal_p_values
+from .pid import (
+    ConformalPIDRegressor,
+    PIDResult,
+    conformal_pid,
+    default_c_sat,
+    ewma_scorecaster,
+    pid_saturation,
+    quantile_tracker_update,
+)
 from .predictive import (
     SplitConformalPredictiveSystem,
     crps_empirical,
@@ -78,6 +87,13 @@ from .weighted import (
 __version__ = "0.1.0"
 
 __all__ = [
+    "ConformalPIDRegressor",
+    "PIDResult",
+    "conformal_pid",
+    "default_c_sat",
+    "ewma_scorecaster",
+    "pid_saturation",
+    "quantile_tracker_update",
     "ConformalSelector",
     "conformal_selection",
     "selection_p_values",

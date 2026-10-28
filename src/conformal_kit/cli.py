@@ -17,6 +17,7 @@ from .full_conformal import FullConformalRidgeRegressor
 from .evaluation import interval_coverage_report, set_coverage_report
 from .ltt import learn_then_test
 from .outliers import ConformalOutlierDetector
+from .pid import ConformalPIDRegressor, ewma_scorecaster
 from .predictive import SplitConformalPredictiveSystem, pit_uniformity_report
 from .regression import SplitConformalRegressor
 from .selection import ConformalSelector, selection_report
@@ -646,6 +647,50 @@ def _cmd_ltt(args):
     return 0 if result.lambda_hat is not None else 1
 
 
+def _cmd_pid(args):
+    """Stream y_true,y_pred rows through conformal PID control."""
+    stream = _read_columns(args.stream, ["y_true", "y_pred"])
+    if args.lr <= 0 or args.k_i < 0 or (args.c_sat is not None and args.c_sat <= 0):
+        raise ValueError("--lr and --c-sat must be > 0 and --k-i >= 0")
+    scorecaster = None if args.ewma_halflife is None else ewma_scorecaster(args.ewma_halflife)
+    model = ConformalPIDRegressor(
+        alpha=args.alpha, lr=args.lr, k_i=args.k_i, c_sat=args.c_sat, scorecaster=scorecaster
+    )
+    n_seed = int(args.warmup)
+    if n_seed < 0 or n_seed >= stream["y_true"].size:
+        raise ValueError("--warmup must be >= 0 and leave at least one streamed row")
+    if n_seed:
+        model.fit(stream["y_true"][:n_seed], stream["y_pred"][:n_seed])
+    y_true, y_pred = stream["y_true"][n_seed:], stream["y_pred"][n_seed:]
+    lower, upper = model.predict_update(y_pred, y_true)
+    covered = np.asarray(model.covered_, dtype=bool)
+    if args.out:
+        with open(args.out, "w", newline="", encoding="utf-8") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["y_true", "y_pred", "lower", "upper", "covered"])
+            writer.writerows(zip(y_true, y_pred, lower, upper, covered.astype(int)))
+    finite = np.isfinite(upper - lower)
+    summary = {
+        "alpha": args.alpha,
+        "target_coverage": 1.0 - args.alpha,
+        "n_warmup": n_seed,
+        "n_stream": int(y_true.size),
+        "coverage": float(covered.mean()),
+        "mean_width": float(np.mean((upper - lower)[finite])) if finite.any() else float("inf"),
+        "n_infinite": int((~finite).sum()),
+    }
+    if args.json:
+        print(json.dumps(summary, indent=2))
+    else:
+        print(f"Conformal PID over {summary['n_stream']} points (warm-up {n_seed})")
+        print(f"Target coverage : {summary['target_coverage']:.1%}")
+        print(f"Coverage        : {summary['coverage']:.1%}")
+        print(f"Mean width      : {summary['mean_width']:.6g}")
+        if args.out:
+            print(f"Wrote {args.out}")
+    return 0
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="conformal-kit",
@@ -834,6 +879,24 @@ def build_parser():
     ltt.add_argument("--out", default=None, help="Write lambda,risk_hat,p_value,valid CSV")
     ltt.add_argument("--json", action="store_true", help="Emit JSON")
 
+    pid = sub.add_parser(
+        "pid",
+        help="Online intervals for a time-ordered stream via conformal PID control",
+    )
+    pid.add_argument("--stream", required=True, help="CSV with y_true,y_pred in arrival order")
+    pid.add_argument("--alpha", type=float, default=0.1, help="Target long-run miscoverage")
+    pid.add_argument("--lr", type=float, default=0.05, help="Quantile-tracker step size")
+    pid.add_argument("--k-i", type=float, default=0.0, help="Integrator gain (0 = off)")
+    pid.add_argument("--c-sat", type=float, default=None, help="Integrator saturation constant")
+    pid.add_argument(
+        "--ewma-halflife", type=float, default=None, help="Enable an EWMA scorecaster (D term)"
+    )
+    pid.add_argument(
+        "--warmup", type=int, default=0, help="Leading rows used only to seed the threshold"
+    )
+    pid.add_argument("--out", default=None, help="Write per-row intervals to this CSV")
+    pid.add_argument("--json", action="store_true", help="Emit JSON")
+
     evaluate = sub.add_parser(
         "evaluate", help="Report empirical coverage for a CSV of intervals"
     )
@@ -864,6 +927,7 @@ def main(argv=None):
         "full-ridge": _cmd_full_ridge,
         "ltt": _cmd_ltt,
         "outliers": _cmd_outliers,
+        "pid": _cmd_pid,
         "predictive": _cmd_predictive,
         "select": _cmd_select,
         "weighted": _cmd_weighted,
