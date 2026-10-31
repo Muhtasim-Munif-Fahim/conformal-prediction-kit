@@ -44,6 +44,13 @@ from .ltt import (
     learn_then_test,
     ltt_p_values,
 )
+from .evalues import (
+    conformal_e_values,
+    derandomized_e_values,
+    e_bh,
+    e_to_p,
+    p_to_e,
+)
 from .outliers import ConformalOutlierDetector, benjamini_hochberg, conformal_p_values
 from .pid import (
     ConformalPIDRegressor,
@@ -131,6 +138,11 @@ __all__ = [
     "bentkus_p_value",
     "binomial_p_value",
     "conformal_p_values",
+    "conformal_e_values",
+    "derandomized_e_values",
+    "e_bh",
+    "e_to_p",
+    "p_to_e",
     "ridge_conformal_set",
     "conformal_quantile",
     "conformal_risk_threshold",

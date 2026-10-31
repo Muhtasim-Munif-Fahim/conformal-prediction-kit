@@ -495,6 +495,23 @@ flags = det.predict(test_scores)                 # 1 = outlier
 report = det.decision_report(test_scores)        # p_values, q_values, flagged
 ```
 
+## Conformal e-values and e-BH (derandomised outlier detection)
+
+`conformal_e_values` builds the BH-thresholded conformal e-values of Bashari
+et al. (NeurIPS 2023); `e_bh` is the e-BH procedure (Wang & Ramdas 2022),
+which controls FDR under arbitrary dependence. e-BH on a single split's
+e-values rejects exactly what BH on conformal p-values rejects, and since
+e-values can be averaged, `derandomized_e_values` combines several random
+calibration splits into one stable, still FDR-valid decision.
+`p_to_e` / `e_to_p` are the standard calibrators.
+
+```python
+from conformal_kit import conformal_e_values, derandomized_e_values, e_bh
+
+runs = [conformal_e_values(cal_split, test_scores, alpha=0.1)[0] for cal_split in splits]
+outliers = e_bh(derandomized_e_values(runs), alpha=0.1)
+```
+
 ## Conformal selection: pick candidates with y > c at a target FDR
 
 Screening problems (drug candidates, job applicants, loans) ask a different
