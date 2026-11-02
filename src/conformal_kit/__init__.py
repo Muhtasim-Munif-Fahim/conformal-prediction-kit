@@ -44,6 +44,12 @@ from .ltt import (
     learn_then_test,
     ltt_p_values,
 )
+from .martingale import (
+    ExchangeabilityTestResult,
+    conformal_test_martingale,
+    exchangeability_test,
+    online_conformal_p_values,
+)
 from .evalues import (
     conformal_e_values,
     derandomized_e_values,
@@ -94,6 +100,10 @@ from .weighted import (
 __version__ = "0.1.0"
 
 __all__ = [
+    "ExchangeabilityTestResult",
+    "conformal_test_martingale",
+    "exchangeability_test",
+    "online_conformal_p_values",
     "ConformalPIDRegressor",
     "PIDResult",
     "conformal_pid",

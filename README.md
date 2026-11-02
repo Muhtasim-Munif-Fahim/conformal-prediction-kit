@@ -495,6 +495,29 @@ flags = det.predict(test_scores)                 # 1 = outlier
 report = det.decision_report(test_scores)        # p_values, q_values, flagged
 ```
 
+## Conformal test martingales (online exchangeability testing)
+
+Every conformal guarantee rests on exchangeability. `exchangeability_test`
+monitors it online: each new observation gets a smoothed conformal p-value
+against all points seen so far (`online_conformal_p_values`; under
+exchangeability these are i.i.d. uniform), and a betting martingale
+(`conformal_test_martingale`) grows when the p-values stop looking uniform.
+By Ville's inequality an alarm at `S_n >= 1/alpha` has false-alarm
+probability at most `alpha` over the *whole* stream. Betting strategies:
+`"power"` (fixed `epsilon`), `"mixture"` (power martingale averaged over
+`epsilon`) and `"jumper"` (Vovk et al.'s Simple Jumper, best for change points).
+
+```python
+from conformal_kit import exchangeability_test
+
+res = exchangeability_test(stream, alpha=0.01, method="jumper", random_state=0)
+res.rejected, res.alarm_index, res.log10_martingale[-1]
+```
+
+```bash
+conformal-kit martingale --data stream.csv --column value --alpha 0.01 --method jumper --out path.csv
+```
+
 ## Conformal e-values and e-BH (derandomised outlier detection)
 
 `conformal_e_values` builds the BH-thresholded conformal e-values of Bashari
