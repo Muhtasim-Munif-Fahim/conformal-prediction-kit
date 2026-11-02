@@ -16,6 +16,7 @@ from .enbpi import enbpi_interval
 from .full_conformal import FullConformalRidgeRegressor
 from .evaluation import interval_coverage_report, set_coverage_report
 from .ltt import learn_then_test
+from .martingale import exchangeability_test
 from .outliers import ConformalOutlierDetector
 from .pid import ConformalPIDRegressor, ewma_scorecaster
 from .predictive import SplitConformalPredictiveSystem, pit_uniformity_report
@@ -260,6 +261,41 @@ def _cmd_outliers(args):
         if args.out:
             print(f"Wrote {args.out}")
     return 0
+
+
+def _cmd_martingale(args):
+    """Online exchangeability test of a CSV column with a conformal test martingale."""
+    column = args.column
+    data = _read_columns(args.data, [column])[column]
+    result = exchangeability_test(
+        data,
+        alpha=args.alpha,
+        method=args.method,
+        score=args.score,
+        randomized=not args.conservative,
+        random_state=args.seed,
+        epsilon=args.epsilon,
+        jump=args.jump,
+    )
+    if args.out:
+        with open(args.out, "w", newline="", encoding="utf-8") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["step", column, "p_value", "log10_martingale"])
+            for i, (x, pv, m) in enumerate(zip(data, result.p_values, result.log10_martingale)):
+                writer.writerow([i, x, pv, m])
+    summary = result.to_dict()
+    if args.json:
+        print(json.dumps(summary, indent=2))
+    else:
+        print(f"Observations    : {summary['n']} ({args.score} scores, {args.method} martingale)")
+        print(f"Max log10 S_n   : {summary['max_log10_martingale']:.3f} (alarm at {-np.log10(args.alpha):.3f})")
+        if result.rejected:
+            print(f"Exchangeability : REJECTED at step {result.alarm_index} (alpha = {args.alpha:g})")
+        else:
+            print(f"Exchangeability : not rejected (alpha = {args.alpha:g})")
+        if args.out:
+            print(f"Wrote {args.out}")
+    return 1 if (args.fail_on_alarm and result.rejected) else 0
 
 
 def _cmd_select(args):
@@ -824,6 +860,23 @@ def build_parser():
     full_ridge.add_argument("--out", default=None, help="Write y_pred,lower,upper to this CSV")
     full_ridge.add_argument("--json", action="store_true", help="Emit JSON")
 
+    mart = sub.add_parser(
+        "martingale",
+        help="Online exchangeability test (conformal test martingale) of a CSV column",
+    )
+    mart.add_argument("--data", required=True, help="CSV with the sequence, in arrival order")
+    mart.add_argument("--column", default="value", help="Column to test (default: value)")
+    mart.add_argument("--alpha", type=float, default=0.01, help="Alarm when the martingale reaches 1/alpha")
+    mart.add_argument("--method", choices=["jumper", "mixture", "power"], default="jumper")
+    mart.add_argument("--score", choices=["mean_distance", "knn", "identity"], default="mean_distance")
+    mart.add_argument("--epsilon", type=float, default=0.92, help="Power martingale exponent")
+    mart.add_argument("--jump", type=float, default=0.01, help="Simple Jumper jump rate")
+    mart.add_argument("--conservative", action="store_true", help="Non-randomized (conservative) p-values")
+    mart.add_argument("--seed", type=int, default=None, help="Seed for the p-value tie-breaking")
+    mart.add_argument("--out", default=None, help="Write per-step p-values and martingale to this CSV")
+    mart.add_argument("--json", action="store_true", help="Emit JSON")
+    mart.add_argument("--fail-on-alarm", action="store_true", help="Exit 1 if exchangeability is rejected")
+
     outliers = sub.add_parser(
         "outliers",
         help="Conformal outlier detection with BH false-discovery-rate control",
@@ -926,6 +979,7 @@ def main(argv=None):
         "evaluate": _cmd_evaluate,
         "full-ridge": _cmd_full_ridge,
         "ltt": _cmd_ltt,
+        "martingale": _cmd_martingale,
         "outliers": _cmd_outliers,
         "pid": _cmd_pid,
         "predictive": _cmd_predictive,
