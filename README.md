@@ -638,3 +638,22 @@ Fits intervals on a heteroskedastic synthetic problem, compares standard, normal
 ## License
 
 MIT
+
+## Multi-output (joint) prediction regions
+
+Running a separate conformal interval for each of `d` targets only covers each target on its own.
+`MultiOutputConformalRegressor` calibrates a single **joint** region with `P(y in region) >= 1 - alpha`:
+
+```python
+from conformal_kit import MultiOutputConformalRegressor, joint_coverage
+
+m = MultiOutputConformalRegressor(alpha=0.1, method="mahalanobis", seed=0).fit(Y_cal, P_cal)
+inside = m.contains(Y_test, P_test)          # exact joint-region membership
+lower, upper = m.predict_interval(P_test)    # box (bounding box for the ellipsoid)
+m.region_volume()
+```
+
+`method="bonferroni"` uses per-target intervals at `alpha/d` (valid but conservative).
+`"max"` builds an exact hyper-rectangle from the scaled max-norm score. `"mahalanobis"` builds
+an ellipsoid that follows the correlation between targets. Scales and covariance are fitted on a
+`scale_fraction` split of the calibration set, so the guarantee stays exact.
