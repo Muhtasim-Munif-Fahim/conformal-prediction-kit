@@ -99,6 +99,8 @@ from .weighted import (
 
 __version__ = "0.1.0"
 
+from .multi_output import MultiOutputConformalRegressor, joint_coverage
+
 __all__ = [
     "ExchangeabilityTestResult",
     "conformal_test_martingale",
@@ -173,6 +175,8 @@ __all__ = [
     "learn_then_test",
     "likelihood_ratio_from_probabilities",
     "ltt_p_values",
+    "MultiOutputConformalRegressor",
+    "joint_coverage",
     "mondrian_quantiles",
     "mondrian_regression_quantiles",
     "pit_uniformity_report",
