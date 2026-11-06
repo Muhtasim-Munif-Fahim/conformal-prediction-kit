@@ -36,6 +36,28 @@ conformal = SplitConformalRegressor(alpha=0.1, normalize=True).fit(
 lower, upper = conformal.predict_interval(test_pred, difficulty=test_sigma)
 ```
 
+
+## Asymmetric split conformal (skewed residuals)
+
+Absolute-residual split conformal forces every interval to be symmetric around
+the point prediction. When residuals are skewed that wastes width on the easy
+side. `AsymmetricSplitConformalRegressor` calibrates the lower and upper tails
+of the *signed* residual separately (Lei et al. 2018; Romano et al. 2019):
+
+```python
+from conformal_kit import AsymmetricSplitConformalRegressor
+
+conformal = AsymmetricSplitConformalRegressor(alpha=0.1).fit(y_cal, pred_cal)
+lower, upper = conformal.predict_interval(pred_test)
+
+# Unequal tails when one side matters more (coverage at 1 - alpha_lo - alpha_hi):
+conformal = AsymmetricSplitConformalRegressor(alpha_lo=0.05, alpha_hi=0.15).fit(y_cal, pred_cal)
+```
+
+`normalize=True` with a per-point `difficulty` scales both tails the same way
+normalized split conformal does. Marginal coverage stays at least `1 - alpha`
+under exchangeability.
+
 ## Mondrian split conformal (group-conditional regression)
 
 When coverage must hold *inside* each segment (region, device, time bucket),

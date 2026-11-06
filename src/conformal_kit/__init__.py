@@ -1,5 +1,9 @@
 """Distribution-free uncertainty quantification via conformal prediction."""
 
+from .asymmetric import (
+    AsymmetricSplitConformalRegressor,
+    asymmetric_interval,
+)
 from .aci import (
     AdaptiveConformalClassifier,
     AdaptiveConformalRegressor,
@@ -122,6 +126,7 @@ __all__ = [
     "clustering_parameters",
     "weighted_kmeans",
     "APSClassifier",
+    "AsymmetricSplitConformalRegressor",
     "AdaptiveConformalClassifier",
     "AdaptiveConformalRegressor",
     "AdaptiveConformalUpdater",
@@ -146,6 +151,7 @@ __all__ = [
     "aci_update",
     "adaptive_conformal_quantile",
     "aps_scores",
+    "asymmetric_interval",
     "benjamini_hochberg",
     "bentkus_p_value",
     "binomial_p_value",
