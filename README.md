@@ -91,6 +91,20 @@ lower, upper = conformal.predict_interval(test_lower, test_upper)
 
 If the two quantile bounds are identical, CQR reduces to split conformal around a point prediction.
 
+## DCP: distributional conformal prediction from a quantile grid
+
+When the model predicts a whole grid of conditional quantiles (quantile forests, multi-quantile boosting, quantile networks), distributional conformal prediction (Chernozhukov, Wüthrich & Zhu, PNAS 2021) uses all of them. The grid defines an estimated conditional CDF `F(y | x)` (linear between grid points, crossing quantiles fixed by sorting), and the score is the label's PIT on that CDF: `|F(y|x) - 1/2|` (`score="dcp"`), or `max(alpha/2 - F, F - 1 + alpha/2)` (`score="dcp-qr"`). Because scores are on the probability scale, the intervals `[Q(1/2 - q), Q(1/2 + q)]` keep the model's conditional skew and spread, and the split-conformal quantile restores finite-sample marginal coverage.
+
+```python
+import numpy as np
+from conformal_kit import DistributionalConformalRegressor
+
+levels = np.linspace(0.01, 0.99, 99)          # columns of Q_cal / Q_test
+dcp = DistributionalConformalRegressor(levels, alpha=0.1).fit(y_cal, Q_cal)
+lower, upper = dcp.predict_interval(Q_test)
+dcp.outside_grid_fraction_   # keep this well below alpha: extend the grid into the tails
+```
+
 ## Jackknife+ and CV+: intervals without a calibration split
 
 Split conformal is cheapest when you can spare a held-out calibration set. Jackknife+ spends that data on training instead, by refitting leave-one-out so every residual comes from a model that never saw that point. CV+ is the same idea with `K` folds rather than `n`. sklearn is not required: pass a duck-typed `fit` / `predict` estimator, or a callable that fits and returns a predictor.
