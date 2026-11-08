@@ -24,6 +24,12 @@ from .clustered import (
     weighted_kmeans,
 )
 from .cqr import ConformalizedQuantileRegressor, cqr_scores
+from .distributional import (
+    DistributionalConformalRegressor,
+    quantile_grid_cdf,
+    quantile_grid_inverse,
+    rearrange_quantiles,
+)
 from .cross_conformal import (
     CrossConformalClassifier,
     cross_conformal_p_values,
@@ -106,6 +112,10 @@ __version__ = "0.1.0"
 from .multi_output import MultiOutputConformalRegressor, joint_coverage
 
 __all__ = [
+    "DistributionalConformalRegressor",
+    "quantile_grid_cdf",
+    "quantile_grid_inverse",
+    "rearrange_quantiles",
     "ExchangeabilityTestResult",
     "conformal_test_martingale",
     "exchangeability_test",
