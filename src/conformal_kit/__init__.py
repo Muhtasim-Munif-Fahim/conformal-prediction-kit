@@ -100,6 +100,7 @@ from .risk_control import (
     false_negative_rate,
 )
 from .venn_abers import VennAbersCalibrator, venn_abers_probabilities
+from .localized import LocalizedConformalRegressor, localizer_weights
 from .weighted import (
     WeightedConformalRegressor,
     effective_sample_size,
@@ -157,6 +158,8 @@ __all__ = [
     "SplitConformalRegressor",
     "VennAbersCalibrator",
     "WeightedConformalRegressor",
+    "LocalizedConformalRegressor",
+    "localizer_weights",
     "__version__",
     "aci_update",
     "adaptive_conformal_quantile",

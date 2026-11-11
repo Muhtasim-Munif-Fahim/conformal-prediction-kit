@@ -355,6 +355,24 @@ lower, upper = model.predict_update(pred_stream, y_stream)  # issued before each
 
 On the CLI, run `conformal-kit pid --stream stream.csv --lr 0.1 --k-i 1 --ewma-halflife 20 --warmup 100 --out pid.csv`.
 
+## Localized conformal: intervals that adapt to the neighbourhood
+
+`LocalizedConformalRegressor` (Guan 2023, *Biometrika*) weights calibration
+residuals by a Gaussian localizer centred at each test point (standardized
+features) and takes the weighted conformal quantile with the test point's own
+weight at `+inf`. Intervals widen where nearby residuals are large and shrink
+where the model is accurate, without a separate difficulty model. The working
+level is calibrated leave-one-out on the calibration set so marginal coverage
+stays close to `1 - alpha`; large `bandwidth` recovers split conformal.
+
+```python
+from conformal_kit import LocalizedConformalRegressor
+
+lcp = LocalizedConformalRegressor(alpha=0.1, bandwidth=0.3).fit(X_cal, y_cal, model.predict(X_cal))
+lower, upper = lcp.predict_interval(X_test, model.predict(X_test))
+lcp.level_, lcp.effective_sample_sizes(X_test)
+```
+
 ## Weighted conformal: coverage under covariate shift
 
 Split conformal assumes calibration and test data are exchangeable. Under
